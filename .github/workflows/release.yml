@@ -64,7 +64,7 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Extracted version: $VERSION"
       
-      - name: Build dmini for ${{ matrix.arch_name }}
+      - name: Build dmdrvi for ${{ matrix.arch_name }}
         run: |
           set -e
           ARCH_DIR_NAME=$(echo "${{ matrix.arch_name }}" | sed 's|/|-|')
@@ -91,29 +91,22 @@ jobs:
           DMF_DIR="$BUILD_DIR/dmf"
           DMFC_DIR="$BUILD_DIR/dmfc"
           
-          cp $DMF_DIR/dmini.dmf release_package/
-          cp $DMF_DIR/dmini_version.txt release_package/
-          cp $DMFC_DIR/dmini.dmfc release_package/ 2>/dev/null || true
-          # Copy test_dmini module
-          cp $DMF_DIR/test_dmini.dmf release_package/
-          cp $DMF_DIR/test_dmini_version.txt release_package/
-          cp $DMFC_DIR/test_dmini.dmfc release_package/ 2>/dev/null || true
+          cp $DMF_DIR/dmdrvi.dmf release_package/
+          cp $DMF_DIR/dmdrvi_version.txt release_package/
+          cp $DMFC_DIR/dmdrvi.dmfc release_package/ 2>/dev/null || true
+
           # Copy .dmd files if they exist
-          if [ -f $DMF_DIR/dmini.dmd ]; then
-            cp $DMF_DIR/dmini.dmd release_package/
-          fi
-          if [ -f $DMF_DIR/test_dmini.dmd ]; then
-            cp $DMF_DIR/test_dmini.dmd release_package/
+          if [ -f $DMF_DIR/dmdrvi.dmd ]; then
+            cp $DMF_DIR/dmdrvi.dmd release_package/
           fi
           
           # Copy .dmr resource files
-          cp dmini.dmr release_package/
-          cp test_dmini.dmr release_package/
+          cp dmdrvi.dmr release_package/
           
           # Copy header files
           mkdir -p release_package/include
-          cp include/dmini.h release_package/include/
-          cp $BUILD_DIR/dmini_defs.h release_package/include/
+          cp include/dmdrvi.h release_package/include/
+          cp $BUILD_DIR/dmdrvi_defs.h release_package/include/
           
           # Copy documentation
           mkdir -p release_package/docs
@@ -130,16 +123,16 @@ jobs:
       - name: Create release archive
         run: |
           cd release_package
-          zip -r ../dmini-${{ github.event.release.tag_name }}-$ARCH_DIR_NAME.zip .
+          zip -r ../dmdrvi-${{ github.event.release.tag_name }}-$ARCH_DIR_NAME.zip .
           cd ..
           echo "Created archive:"
-          ls -lh dmini-*.zip
+          ls -lh dmdrvi-*.zip
       
       - name: Upload artifact
         uses: actions/upload-artifact@v4.4.3
         with:
           name: ${{ env.ARTIFACT_NAME }}
-          path: dmini-${{ github.event.release.tag_name }}-*.zip
+          path: dmdrvi-${{ github.event.release.tag_name }}-*.zip
           retention-days: 1
 
   generate-versions-manifest:
@@ -158,7 +151,7 @@ jobs:
       - name: Generate versions.dmm
         run: |
           set -e
-          echo "# List of available versions for dmini modules" > versions.dmm
+          echo "# List of available versions for dmdrvi modules" > versions.dmm
           echo "# Generated automatically by CI" >> versions.dmm
           echo "" >> versions.dmm
           
@@ -177,8 +170,8 @@ jobs:
           echo "Found versions: $VERSIONS"
           
           # Add $version-available directives for the modules
-          echo "\$version-available dmini $VERSIONS" >> versions.dmm
-          echo "\$version-available test_dmini $VERSIONS" >> versions.dmm
+          echo "\$version-available dmdrvi $VERSIONS" >> versions.dmm
+          echo "\$version-available test_dmdrvi $VERSIONS" >> versions.dmm
           
           echo "Generated versions.dmm:"
           cat versions.dmm
