@@ -119,18 +119,20 @@ dmini_destroy(config);
 ## Device Number System
 
 The module uses a major/minor device numbering system:
-- **Major number**: Identifies the device channel (e.g., UART0, UART1, SPI0)
+- **Major number**: Identifies the device channel within a driver type (e.g., UART0, UART1, SPI0)
 - **Minor number**: Identifies virtual configuration for the same channel (useful when you need different configurations, e.g., different SPI speeds for different CS lines)
+
+**Note**: Major numbers are scoped per device driver type. Different drivers (UART, SPI, etc.) can use the same major numbers for their own channels.
 
 Example device numbers:
 ```
-Device Channel      Major   Minor   Description
----------------------------------------------------
-UART0 default       0       0       Default configuration
-UART0 alt config    0       1       Alternative configuration
-UART1 default       1       0       Default configuration
-SPI0 CS0            0       0       SPI channel 0, config 0
-SPI0 CS1            0       1       SPI channel 0, config 1 (e.g., different speed)
+Driver  Channel         Major   Minor   Description
+-----------------------------------------------------
+UART    UART0 default   0       0       Default configuration
+UART    UART0 alt       0       1       Alternative configuration
+UART    UART1 default   1       0       Default configuration
+SPI     SPI0 CS0        0       0       SPI channel 0, config 0
+SPI     SPI0 CS1        0       1       SPI channel 0, config 1 (different speed)
 ```
 
 ## Error Handling

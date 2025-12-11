@@ -208,10 +208,11 @@ dmdrvi_close(ctx, handle);
 
 ```c
 // Create contexts for different device channels and configurations
-dmdrvi_dev_num_t uart0 = { .major = 0, .minor = 0 };  // UART channel 0, default config
-dmdrvi_dev_num_t uart1 = { .major = 1, .minor = 0 };  // UART channel 1, default config
-dmdrvi_dev_num_t spi0_cs0 = { .major = 0, .minor = 0 };  // SPI channel 0, CS0 config
-dmdrvi_dev_num_t spi0_cs1 = { .major = 0, .minor = 1 };  // SPI channel 0, CS1 config (e.g., different speed)
+// Note: Major numbers are per device driver type
+dmdrvi_dev_num_t uart0 = { .major = 0, .minor = 0 };  // UART driver, channel 0, default config
+dmdrvi_dev_num_t uart1 = { .major = 1, .minor = 0 };  // UART driver, channel 1, default config
+dmdrvi_dev_num_t spi0_cs0 = { .major = 0, .minor = 0 };  // SPI driver, channel 0, CS0 config
+dmdrvi_dev_num_t spi0_cs1 = { .major = 0, .minor = 1 };  // SPI driver, channel 0, CS1 config (e.g., different speed)
 
 dmdrvi_context_t uart0_ctx = dmdrvi_create(NULL, &uart0);
 dmdrvi_context_t uart1_ctx = dmdrvi_create(NULL, &uart1);
@@ -240,31 +241,35 @@ dmdrvi_free(spi0_cs1_ctx);
 
 ## DEVICE CHANNELS AND CONFIGURATIONS
 
-The major number identifies the device channel, while the minor number identifies 
-the virtual configuration for that channel.
+The major number identifies the device channel within a specific driver type, while 
+the minor number identifies the virtual configuration for that channel.
 
-Example device channels:
+**Important**: Major numbers are scoped per device driver type (UART driver, SPI 
+driver, etc.). Different driver types can use the same major number for their own 
+channels.
 
-| Device Channel   | Major | Description                     |
-|------------------|-------|---------------------------------|
-| UART0            | 0     | First UART channel              |
-| UART1            | 1     | Second UART channel             |
-| SPI0             | 0     | First SPI channel               |
-| SPI1             | 1     | Second SPI channel              |
-| GPIO0            | 0     | First GPIO controller           |
-| I2C0             | 0     | First I2C channel               |
+Example device channels (per driver type):
+
+| Driver Type | Device Channel | Major | Description                     |
+|-------------|----------------|-------|---------------------------------|
+| UART        | UART0          | 0     | First UART channel              |
+| UART        | UART1          | 1     | Second UART channel             |
+| SPI         | SPI0           | 0     | First SPI channel               |
+| SPI         | SPI1           | 1     | Second SPI channel              |
+| GPIO        | GPIO0          | 0     | First GPIO controller           |
+| I2C         | I2C0           | 0     | First I2C channel               |
 
 Minor numbers identify virtual configurations for the same channel. For example, 
-SPI0 with minor=0 might use 1MHz clock speed, while SPI0 with minor=1 uses 10MHz 
-for a different chip select line.
+SPI0 (major=0) with minor=0 might use 1MHz clock speed, while SPI0 (major=0) with 
+minor=1 uses 10MHz for a different chip select line.
 
-Example SPI configurations:
+Example SPI configurations (same SPI driver):
 ```
-Channel  Major  Minor  Description
--------------------------------------
-SPI0     0      0      Default speed (1MHz)
-SPI0     0      1      High speed (10MHz) for different CS
-SPI0     0      2      Custom config for another device
+Driver  Channel  Major  Minor  Description
+-----------------------------------------------
+SPI     SPI0     0      0      Default speed (1MHz)
+SPI     SPI0     0      1      High speed (10MHz) for different CS
+SPI     SPI0     0      2      Custom config for another device
 ```
 
 ## CONFIGURATION
