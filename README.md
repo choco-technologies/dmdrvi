@@ -101,13 +101,11 @@ dmdrvi can work with dmini module for device configuration:
 dmini_context_t config = dmini_create();
 dmini_parse_file(config, "device.ini");
 
-// Get device numbers from config
-int major = dmini_get_int(config, "device", "major", 0);  // Channel number
-int minor = dmini_get_int(config, "device", "minor", 0);  // Config variant
-
-dmdrvi_dev_num_t dev_num = { .major = major, .minor = minor };
+// Device numbers come from device filesystem, not from config
+dmdrvi_dev_num_t dev_num = { .major = 0, .minor = 0 };
 
 // Create driver context with configuration
+// Config contains device-specific settings (baudrate, mode, etc.)
 dmdrvi_context_t driver = dmdrvi_create(config, &dev_num);
 
 // Use driver...

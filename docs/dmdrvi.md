@@ -147,13 +147,11 @@ dmdrvi_free(ctx);
 dmini_context_t config = dmini_create();
 dmini_parse_file(config, "device.ini");
 
-// Get device numbers from config
-int major = dmini_get_int(config, "uart", "major", 0);  // UART channel
-int minor = dmini_get_int(config, "uart", "minor", 0);  // Configuration variant
-
-dmdrvi_dev_num_t dev_num = { .major = major, .minor = minor };
+// Device numbers come from device filesystem, not from config file
+dmdrvi_dev_num_t dev_num = { .major = 0, .minor = 0 };
 
 // Create driver with configuration
+// Config contains device-specific settings (baudrate, mode, speed, etc.)
 dmdrvi_context_t driver = dmdrvi_create(config, &dev_num);
 
 // Open and use device
@@ -277,25 +275,25 @@ SPI     SPI0     0      2      Custom config for another device
 Example device configuration using dmini (device.ini):
 
 ```ini
-[uart0_default]
-major=0
-minor=0
+[uart0]
 baudrate=115200
 databits=8
 parity=none
+stopbits=1
 
 [spi0_slow]
-major=0
-minor=0
 speed=1000000
 mode=0
+bits_per_word=8
 
 [spi0_fast]
-major=0
-minor=1
 speed=10000000
 mode=0
+bits_per_word=8
 ```
+
+Note: Major and minor device numbers are provided by the device filesystem layer, 
+not through configuration files.
 
 ## SEE ALSO
 
