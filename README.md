@@ -41,9 +41,9 @@ dmdrvi is a driver interface module designed for embedded systems using the DMOD
 ```c
 #include "dmdrvi.h"
 
-// Define device number
+// Define device number (UART channel 0, default config)
 dmdrvi_dev_num_t dev_num = {
-    .major = 1,
+    .major = 0,
     .minor = 0
 };
 
@@ -102,8 +102,8 @@ dmini_context_t config = dmini_create();
 dmini_parse_file(config, "device.ini");
 
 // Get device numbers from config
-int major = dmini_get_int(config, "device", "major", 1);
-int minor = dmini_get_int(config, "device", "minor", 0);
+int major = dmini_get_int(config, "device", "major", 0);  // Channel number
+int minor = dmini_get_int(config, "device", "minor", 0);  // Config variant
 
 dmdrvi_dev_num_t dev_num = { .major = major, .minor = minor };
 
@@ -119,18 +119,18 @@ dmini_destroy(config);
 ## Device Number System
 
 The module uses a major/minor device numbering system:
-- **Major number**: Identifies the device driver type
-- **Minor number**: Identifies the specific device instance
+- **Major number**: Identifies the device channel (e.g., UART0, UART1, SPI0)
+- **Minor number**: Identifies virtual configuration for the same channel (useful when you need different configurations, e.g., different SPI speeds for different CS lines)
 
 Example device numbers:
 ```
-Device Type         Major   Minor
------------------------------------
-Serial Port 0       1       0
-Serial Port 1       1       1
-GPIO Controller     2       0
-SPI Bus 0           3       0
-I2C Bus 0           4       0
+Device Channel      Major   Minor   Description
+---------------------------------------------------
+UART0 default       0       0       Default configuration
+UART0 alt config    0       1       Alternative configuration
+UART1 default       1       0       Default configuration
+SPI0 CS0            0       0       SPI channel 0, config 0
+SPI0 CS1            0       1       SPI channel 0, config 1 (e.g., different speed)
 ```
 
 ## Error Handling

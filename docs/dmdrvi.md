@@ -39,13 +39,13 @@ device files.
 Devices are identified using a device number structure containing major and 
 minor numbers:
 
-* **Major number** - Identifies the device driver type (e.g., serial, GPIO, SPI)
-* **Minor number** - Identifies the specific device instance (e.g., UART0, UART1)
+* **Major number** - Identifies the device channel (e.g., UART0, UART1, SPI0)
+* **Minor number** - Identifies virtual configuration for the same channel (useful when you need different configurations on the same channel, e.g., different SPI speeds for different chip select lines)
 
 ```c
 typedef struct {
-    dmdrvi_dev_id_t major;  ///< Major device number
-    dmdrvi_dev_id_t minor;  ///< Minor device number
+    dmdrvi_dev_id_t major;  ///< Major device number (channel)
+    dmdrvi_dev_id_t minor;  ///< Minor device number (virtual config)
 } dmdrvi_dev_num_t;
 ```
 
@@ -115,8 +115,8 @@ Functions return values as follows:
 ```c
 #include "dmdrvi.h"
 
-// Define device (UART0 - major=1, minor=0)
-dmdrvi_dev_num_t dev_num = { .major = 1, .minor = 0 };
+// Define device (UART0, default config - major=0, minor=0)
+dmdrvi_dev_num_t dev_num = { .major = 0, .minor = 0 };
 
 // Create driver context
 dmdrvi_context_t ctx = dmdrvi_create(NULL, &dev_num);
@@ -148,8 +148,8 @@ dmini_context_t config = dmini_create();
 dmini_parse_file(config, "device.ini");
 
 // Get device numbers from config
-int major = dmini_get_int(config, "uart", "major", 1);
-int minor = dmini_get_int(config, "uart", "minor", 0);
+int major = dmini_get_int(config, "uart", "major", 0);  // UART channel
+int minor = dmini_get_int(config, "uart", "minor", 0);  // Configuration variant
 
 dmdrvi_dev_num_t dev_num = { .major = major, .minor = minor };
 
@@ -207,66 +207,89 @@ dmdrvi_close(ctx, handle);
 ### Multiple Device Access
 
 ```c
-// Create contexts for different devices
-dmdrvi_dev_num_t uart0 = { .major = 1, .minor = 0 };
-dmdrvi_dev_num_t uart1 = { .major = 1, .minor = 1 };
-dmdrvi_dev_num_t gpio = { .major = 2, .minor = 0 };
+// Create contexts for different device channels and configurations
+dmdrvi_dev_num_t uart0 = { .major = 0, .minor = 0 };  // UART channel 0, default config
+dmdrvi_dev_num_t uart1 = { .major = 1, .minor = 0 };  // UART channel 1, default config
+dmdrvi_dev_num_t spi0_cs0 = { .major = 0, .minor = 0 };  // SPI channel 0, CS0 config
+dmdrvi_dev_num_t spi0_cs1 = { .major = 0, .minor = 1 };  // SPI channel 0, CS1 config (e.g., different speed)
 
 dmdrvi_context_t uart0_ctx = dmdrvi_create(NULL, &uart0);
 dmdrvi_context_t uart1_ctx = dmdrvi_create(NULL, &uart1);
-dmdrvi_context_t gpio_ctx = dmdrvi_create(NULL, &gpio);
+dmdrvi_context_t spi0_cs0_ctx = dmdrvi_create(NULL, &spi0_cs0);
+dmdrvi_context_t spi0_cs1_ctx = dmdrvi_create(NULL, &spi0_cs1);
 
 // Open all devices
 void* uart0_handle = dmdrvi_open(uart0_ctx, DMDRVI_O_RDWR);
 void* uart1_handle = dmdrvi_open(uart1_ctx, DMDRVI_O_RDWR);
-void* gpio_handle = dmdrvi_open(gpio_ctx, DMDRVI_O_WRONLY);
+void* spi0_cs0_handle = dmdrvi_open(spi0_cs0_ctx, DMDRVI_O_RDWR);
+void* spi0_cs1_handle = dmdrvi_open(spi0_cs1_ctx, DMDRVI_O_RDWR);
 
 // Use devices...
 
 // Cleanup all
 dmdrvi_close(uart0_ctx, uart0_handle);
 dmdrvi_close(uart1_ctx, uart1_handle);
-dmdrvi_close(gpio_ctx, gpio_handle);
+dmdrvi_close(spi0_cs0_ctx, spi0_cs0_handle);
+dmdrvi_close(spi0_cs1_ctx, spi0_cs1_handle);
 
 dmdrvi_free(uart0_ctx);
 dmdrvi_free(uart1_ctx);
-dmdrvi_free(gpio_ctx);
+dmdrvi_free(spi0_cs0_ctx);
+dmdrvi_free(spi0_cs1_ctx);
 ```
 
-## DEVICE TYPES
+## DEVICE CHANNELS AND CONFIGURATIONS
 
-Common device types and their typical major numbers:
+The major number identifies the device channel, while the minor number identifies 
+the virtual configuration for that channel.
 
-| Device Type      | Major | Description                    |
-|------------------|-------|--------------------------------|
-| Serial/UART      | 1     | Serial communication ports     |
-| GPIO             | 2     | General Purpose I/O            |
-| SPI              | 3     | Serial Peripheral Interface    |
-| I2C              | 4     | Inter-Integrated Circuit       |
-| ADC              | 5     | Analog-to-Digital Converter    |
-| DAC              | 6     | Digital-to-Analog Converter    |
-| Timer            | 7     | Hardware timers                |
-| PWM              | 8     | Pulse Width Modulation         |
+Example device channels:
 
-Minor numbers typically identify specific instances (e.g., UART0, UART1).
+| Device Channel   | Major | Description                     |
+|------------------|-------|---------------------------------|
+| UART0            | 0     | First UART channel              |
+| UART1            | 1     | Second UART channel             |
+| SPI0             | 0     | First SPI channel               |
+| SPI1             | 1     | Second SPI channel              |
+| GPIO0            | 0     | First GPIO controller           |
+| I2C0             | 0     | First I2C channel               |
+
+Minor numbers identify virtual configurations for the same channel. For example, 
+SPI0 with minor=0 might use 1MHz clock speed, while SPI0 with minor=1 uses 10MHz 
+for a different chip select line.
+
+Example SPI configurations:
+```
+Channel  Major  Minor  Description
+-------------------------------------
+SPI0     0      0      Default speed (1MHz)
+SPI0     0      1      High speed (10MHz) for different CS
+SPI0     0      2      Custom config for another device
+```
 
 ## CONFIGURATION
 
 Example device configuration using dmini (device.ini):
 
 ```ini
-[uart]
-major=1
+[uart0_default]
+major=0
 minor=0
 baudrate=115200
 databits=8
 parity=none
 
-[gpio]
-major=2
+[spi0_slow]
+major=0
 minor=0
-direction=output
-initial_state=low
+speed=1000000
+mode=0
+
+[spi0_fast]
+major=0
+minor=1
+speed=10000000
+mode=0
 ```
 
 ## SEE ALSO
