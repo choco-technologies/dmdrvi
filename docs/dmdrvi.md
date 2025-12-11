@@ -44,8 +44,8 @@ minor numbers:
 
 ```c
 typedef struct {
-    dmdrvi_dev_id_t major;  // Major device number
-    dmdrvi_dev_id_t minor;  // Minor device number
+    dmdrvi_dev_id_t major;  ///< Major device number
+    dmdrvi_dev_id_t minor;  ///< Minor device number
 } dmdrvi_dev_num_t;
 ```
 
@@ -94,8 +94,8 @@ Returns 0 on success or an errno-compatible error code.
 
 ```c
 typedef struct {
-    uint32_t size;  // Size of the device/file
-    uint32_t mode;  // Device mode (permissions)
+    uint32_t size;  //!< Size of the device/file
+    uint32_t mode;  //!< Device mode (permissions)
 } dmdrvi_stat_t;
 ```
 
