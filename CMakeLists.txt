@@ -3,6 +3,10 @@
 # =====================================================================
 cmake_minimum_required(VERSION 3.18)
 
+# ======================================================================
+#               For VS Code
+# ======================================================================
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # ======================================================================
 #               dmdrvi Version
@@ -71,6 +75,10 @@ set(DMOD_STACK_SIZE         1024)
 dmod_add_library(${DMOD_MODULE_NAME} ${DMOD_MODULE_VERSION}
     # List of source files - can include C and C++ files
     src/dmdrvi.c
+)
+
+dmod_link_modules(${DMOD_MODULE_NAME}
+    dmini
 )
 
 target_include_directories(${DMOD_MODULE_NAME} PRIVATE

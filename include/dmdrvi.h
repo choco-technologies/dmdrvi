@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include "dmod.h"
 #include "dmdrvi_defs.h"
+#include "dmini.h"
 
 /**
  * @brief Opaque context type for DMDRVI module
@@ -56,7 +57,7 @@ typedef struct
  * 
  * @return dmdrvi_context_t Created DMDRVI context
  */
-dmod_dmdrvi_dif(1.0, dmdrvi_context_t, _create, ( void* config, const dmdrvi_dev_num_t* dev_num ));
+dmod_dmdrvi_dif(1.0, dmdrvi_context_t, _create, ( dmini_context_t config, const dmdrvi_dev_num_t* dev_num ));
 
 /**
  * @brief Free a DMDRVI context
