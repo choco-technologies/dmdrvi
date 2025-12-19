@@ -37,17 +37,29 @@ device files.
 ### Device Number System
 
 Devices are identified using a device number structure containing major and 
-minor numbers:
+minor numbers, along with flags that indicate which numbering scheme the driver uses:
 
 * **Major number** - Identifies the device channel (e.g., UART0, UART1, SPI0)
-* **Minor number** - Identifies virtual configuration for the same channel (useful when you need different configurations on the same channel, e.g., different SPI speeds for different chip select lines)
+* **Minor number** - Identifies specific configuration for the same channel (e.g., different SPI speeds for different chip select lines)
+* **Flags** - Indicate which numbering scheme is used (none, major only, or major+minor)
 
 ```c
 typedef struct {
     dmdrvi_dev_id_t major;  ///< Major device number (channel)
-    dmdrvi_dev_id_t minor;  ///< Minor device number (virtual config)
+    dmdrvi_dev_id_t minor;  ///< Minor device number (specific config)
+    uint8_t flags;          ///< Device numbering flags
 } dmdrvi_dev_num_t;
 ```
+
+### Device Numbering Flags
+
+* **DMDRVI_NUM_NONE** (0x00) - Driver does not use numbering (e.g., `/dev/dmclk`)
+* **DMDRVI_NUM_MAJOR** (0x01) - Driver uses major number only (e.g., `/dev/dmuart0`)
+* **DMDRVI_NUM_MINOR** (0x02) - Driver uses minor number; requires major (e.g., `/dev/dmspi0/0`)
+
+The driver manages its own namespace and assigns device numbers when creating 
+a context. Each driver can independently use the same major/minor numbers without 
+conflicts.
 
 ### Access Modes
 
@@ -61,8 +73,9 @@ Device open flags control access permissions:
 
 **dmdrvi_create()** creates a new driver context for the specified device. 
 The *config* parameter can be NULL or a pointer to a dmini_context object 
-containing device configuration. The *dev_num* parameter specifies the device 
-major and minor numbers. Returns a context pointer or NULL on error.
+containing device configuration. The *dev_num* parameter is an output parameter - 
+the driver will assign device numbers (major, minor) and set the flags to indicate 
+which numbering scheme it uses. Returns a context pointer or NULL on error.
 
 **dmdrvi_free()** frees all resources associated with a driver context.
 
@@ -115,11 +128,18 @@ Functions return values as follows:
 ```c
 #include "dmdrvi.h"
 
-// Define device (UART0, default config - major=0, minor=0)
-dmdrvi_dev_num_t dev_num = { .major = 0, .minor = 0 };
-
-// Create driver context
+// Create driver context - driver assigns device numbers
+dmdrvi_dev_num_t dev_num;  // Output parameter
 dmdrvi_context_t ctx = dmdrvi_create(NULL, &dev_num);
+
+// Check the numbering scheme
+if (dev_num.flags == DMDRVI_NUM_NONE) {
+    Dmod_Printf("Device: /dev/dmclk\n");
+} else if (dev_num.flags == DMDRVI_NUM_MAJOR) {
+    Dmod_Printf("Device: /dev/dmuart%d\n", dev_num.major);
+} else if (dev_num.flags == (DMDRVI_NUM_MAJOR | DMDRVI_NUM_MINOR)) {
+    Dmod_Printf("Device: /dev/dmspi%d/%d\n", dev_num.major, dev_num.minor);
+}
 
 // Open device for reading and writing
 void* handle = dmdrvi_open(ctx, DMDRVI_O_RDWR);
@@ -147,12 +167,12 @@ dmdrvi_free(ctx);
 dmini_context_t config = dmini_create();
 dmini_parse_file(config, "device.ini");
 
-// Device numbers come from device filesystem, not from config file
-dmdrvi_dev_num_t dev_num = { .major = 0, .minor = 0 };
-
-// Create driver with configuration
-// Config contains device-specific settings (baudrate, mode, speed, etc.)
+// Create driver with configuration - driver assigns device numbers
+dmdrvi_dev_num_t dev_num;  // Output parameter
 dmdrvi_context_t driver = dmdrvi_create(config, &dev_num);
+
+// The driver has now assigned device numbers and set flags
+// Config contains device-specific settings (baudrate, mode, speed, etc.)
 
 // Open and use device
 void* handle = dmdrvi_open(driver, DMDRVI_O_RDWR);
@@ -205,19 +225,34 @@ dmdrvi_close(ctx, handle);
 ### Multiple Device Access
 
 ```c
-// Create contexts for different device channels and configurations
-// Note: Major numbers are per device driver type
-dmdrvi_dev_num_t uart0 = { .major = 0, .minor = 0 };  // UART driver, channel 0, default config
-dmdrvi_dev_num_t uart1 = { .major = 1, .minor = 0 };  // UART driver, channel 1, default config
-dmdrvi_dev_num_t spi0_cs0 = { .major = 0, .minor = 0 };  // SPI driver, channel 0, CS0 config
-dmdrvi_dev_num_t spi0_cs1 = { .major = 0, .minor = 1 };  // SPI driver, channel 0, CS1 config (e.g., different speed)
+// Create contexts for different drivers and configurations
+// Each driver manages its own device number namespace
 
-dmdrvi_context_t uart0_ctx = dmdrvi_create(NULL, &uart0);
-dmdrvi_context_t uart1_ctx = dmdrvi_create(NULL, &uart1);
-dmdrvi_context_t spi0_cs0_ctx = dmdrvi_create(NULL, &spi0_cs0);
-dmdrvi_context_t spi0_cs1_ctx = dmdrvi_create(NULL, &spi0_cs1);
+// Example 1: Driver without numbering (clock driver)
+dmdrvi_dev_num_t clk_num;
+dmdrvi_context_t clk_ctx = dmdrvi_create(NULL, &clk_num);
+// clk_num.flags == DMDRVI_NUM_NONE
+// Device file: /dev/dmclk
+
+// Example 2: Driver with major numbering only (UART driver)
+dmdrvi_dev_num_t uart0_num, uart1_num;
+dmdrvi_context_t uart0_ctx = dmdrvi_create(uart0_config, &uart0_num);
+dmdrvi_context_t uart1_ctx = dmdrvi_create(uart1_config, &uart1_num);
+// uart0_num.flags == DMDRVI_NUM_MAJOR, uart0_num.major == 0
+// uart1_num.flags == DMDRVI_NUM_MAJOR, uart1_num.major == 1
+// Device files: /dev/dmuart0, /dev/dmuart1
+
+// Example 3: Driver with major+minor numbering (SPI driver)
+dmdrvi_dev_num_t spi0_cs0_num, spi0_cs1_num;
+dmdrvi_context_t spi0_cs0_ctx = dmdrvi_create(spi0_cs0_config, &spi0_cs0_num);
+dmdrvi_context_t spi0_cs1_ctx = dmdrvi_create(spi0_cs1_config, &spi0_cs1_num);
+// spi0_cs0_num.flags == (DMDRVI_NUM_MAJOR | DMDRVI_NUM_MINOR)
+// spi0_cs0_num.major == 0, spi0_cs0_num.minor == 0
+// spi0_cs1_num.major == 0, spi0_cs1_num.minor == 1
+// Device files: /dev/dmspi0/0, /dev/dmspi0/1
 
 // Open all devices
+void* clk_handle = dmdrvi_open(clk_ctx, DMDRVI_O_RDWR);
 void* uart0_handle = dmdrvi_open(uart0_ctx, DMDRVI_O_RDWR);
 void* uart1_handle = dmdrvi_open(uart1_ctx, DMDRVI_O_RDWR);
 void* spi0_cs0_handle = dmdrvi_open(spi0_cs0_ctx, DMDRVI_O_RDWR);
@@ -226,11 +261,13 @@ void* spi0_cs1_handle = dmdrvi_open(spi0_cs1_ctx, DMDRVI_O_RDWR);
 // Use devices...
 
 // Cleanup all
+dmdrvi_close(clk_ctx, clk_handle);
 dmdrvi_close(uart0_ctx, uart0_handle);
 dmdrvi_close(uart1_ctx, uart1_handle);
 dmdrvi_close(spi0_cs0_ctx, spi0_cs0_handle);
 dmdrvi_close(spi0_cs1_ctx, spi0_cs1_handle);
 
+dmdrvi_free(clk_ctx);
 dmdrvi_free(uart0_ctx);
 dmdrvi_free(uart1_ctx);
 dmdrvi_free(spi0_cs0_ctx);
@@ -239,36 +276,44 @@ dmdrvi_free(spi0_cs1_ctx);
 
 ## DEVICE CHANNELS AND CONFIGURATIONS
 
-The major number identifies the device channel within a specific driver type, while 
-the minor number identifies the virtual configuration for that channel.
+Each driver manages its own device number namespace. The driver decides which 
+numbering scheme to use based on its needs:
 
-**Important**: Major numbers are scoped per device driver type (UART driver, SPI 
-driver, etc.). Different driver types can use the same major number for their own 
-channels.
+### Numbering Schemes
 
-Example device channels (per driver type):
+**No Numbering (DMDRVI_NUM_NONE)**
+* Driver doesn't use device numbers
+* Device file uses driver name only
+* Example: `/dev/dmclk` (clock driver)
 
-| Driver Type | Device Channel | Major | Description                     |
-|-------------|----------------|-------|---------------------------------|
-| UART        | UART0          | 0     | First UART channel              |
-| UART        | UART1          | 1     | Second UART channel             |
-| SPI         | SPI0           | 0     | First SPI channel               |
-| SPI         | SPI1           | 1     | Second SPI channel              |
-| GPIO        | GPIO0          | 0     | First GPIO controller           |
-| I2C         | I2C0           | 0     | First I2C channel               |
+**Major Number Only (DMDRVI_NUM_MAJOR)**
+* Driver uses major number to identify channels
+* Device files named with major number suffix
+* Example: `/dev/dmuart0`, `/dev/dmuart1` (UART driver channels)
 
-Minor numbers identify virtual configurations for the same channel. For example, 
-SPI0 (major=0) with minor=0 might use 1MHz clock speed, while SPI0 (major=0) with 
-minor=1 uses 10MHz for a different chip select line.
+**Major and Minor Numbers (DMDRVI_NUM_MAJOR | DMDRVI_NUM_MINOR)**
+* Driver uses both major and minor numbers
+* Creates directory for major number, files for each minor number
+* Example: `/dev/dmspi0/0`, `/dev/dmspi0/1` (SPI driver with different configs)
 
-Example SPI configurations (same SPI driver):
-```
-Driver  Channel  Major  Minor  Description
------------------------------------------------
-SPI     SPI0     0      0      Default speed (1MHz)
-SPI     SPI0     0      1      High speed (10MHz) for different CS
-SPI     SPI0     0      2      Custom config for another device
-```
+### Device Number Namespaces
+
+Each driver has its own independent namespace. Different drivers can use the 
+same major/minor numbers without conflicts:
+
+| Driver Type | Flags                    | Major | Minor | Device Path     |
+|-------------|--------------------------|-------|-------|-----------------|
+| CLK         | NUM_NONE                 | -     | -     | /dev/dmclk      |
+| UART        | NUM_MAJOR                | 0     | -     | /dev/dmuart0    |
+| UART        | NUM_MAJOR                | 1     | -     | /dev/dmuart1    |
+| SPI         | NUM_MAJOR \| NUM_MINOR   | 0     | 0     | /dev/dmspi0/0   |
+| SPI         | NUM_MAJOR \| NUM_MINOR   | 0     | 1     | /dev/dmspi0/1   |
+| SPI         | NUM_MAJOR \| NUM_MINOR   | 1     | 0     | /dev/dmspi1/0   |
+| I2C         | NUM_MAJOR                | 0     | -     | /dev/dmi2c0     |
+
+The major number identifies the device channel within a driver (e.g., UART0 vs UART1).
+The minor number identifies specific configurations for the same channel (e.g., 
+different SPI speeds for different chip select lines).
 
 ## CONFIGURATION
 
@@ -292,8 +337,9 @@ mode=0
 bits_per_word=8
 ```
 
-Note: Major and minor device numbers are provided by the device filesystem layer, 
-not through configuration files.
+The driver reads the configuration and assigns device numbers based on its 
+internal logic. The filesystem layer then creates device files according to the 
+numbering scheme used by the driver.
 
 ## SEE ALSO
 

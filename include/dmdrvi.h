@@ -32,12 +32,20 @@ typedef uint8_t dmdrvi_dev_id_t;
 #define DMDRVI_O_RDWR      0x04    
 
 /**
+ * @brief Device numbering flags
+ */
+#define DMDRVI_NUM_NONE         0x00    ///< Driver does not use numbering
+#define DMDRVI_NUM_MAJOR        0x01    ///< Driver uses major number only
+#define DMDRVI_NUM_MINOR        0x02    ///< Driver uses minor number (requires major)
+
+/**
  * @brief Device number type
  */
 typedef struct 
 {
     dmdrvi_dev_id_t major;  ///< Major device number
     dmdrvi_dev_id_t minor;  ///< Minor device number
+    uint8_t flags;          ///< Device numbering flags (DMDRVI_NUM_*)
 } dmdrvi_dev_num_t;
 
 /**
@@ -52,12 +60,16 @@ typedef struct
 /**
  * @brief Create a DMDRVI context
  *
+ * The driver will assign device numbers based on the configuration and return them
+ * via the dev_num parameter. The driver also sets flags to indicate which numbering
+ * scheme it uses (none, major only, or major+minor).
+ *
  * @param config Pointer to dmini_context object with configuration parameters (dmini module required to parse them)
- * @param dev_num Pointer to device number structure
+ * @param dev_num Output pointer to device number structure - driver fills in major, minor, and flags
  * 
  * @return dmdrvi_context_t Created DMDRVI context
  */
-dmod_dmdrvi_dif(1.0, dmdrvi_context_t, _create, ( dmini_context_t config, const dmdrvi_dev_num_t* dev_num ));
+dmod_dmdrvi_dif(1.0, dmdrvi_context_t, _create, ( dmini_context_t config, dmdrvi_dev_num_t* dev_num ));
 
 /**
  * @brief Free a DMDRVI context
