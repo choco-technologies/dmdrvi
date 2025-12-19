@@ -49,12 +49,14 @@ dmdrvi_context_t ctx = dmdrvi_create(NULL, &dev_num);
 if (dev_num.flags == DMDRVI_NUM_NONE) {
     // Device file: /dev/dmclk
     Dmod_Printf("Device: /dev/dmclk\n");
-} else if (dev_num.flags == DMDRVI_NUM_MAJOR) {
-    // Device file: /dev/dmuart0, /dev/dmuart1, etc.
-    Dmod_Printf("Device: /dev/dmuart%d\n", dev_num.major);
-} else if (dev_num.flags == (DMDRVI_NUM_MAJOR | DMDRVI_NUM_MINOR)) {
+} else if (dev_num.flags & DMDRVI_NUM_MINOR) {
     // Device file: /dev/dmspi0/0, /dev/dmspi0/1, etc.
+    // Driver uses both major and minor (directory structure)
     Dmod_Printf("Device: /dev/dmspi%d/%d\n", dev_num.major, dev_num.minor);
+} else if (dev_num.flags & DMDRVI_NUM_MAJOR) {
+    // Device file: /dev/dmuart0, /dev/dmuart1, etc.
+    // Driver uses major number only
+    Dmod_Printf("Device: /dev/dmuart%d\n", dev_num.major);
 }
 
 // Open device for reading and writing

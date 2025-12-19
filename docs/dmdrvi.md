@@ -55,11 +55,12 @@ typedef struct {
 
 * **DMDRVI_NUM_NONE** (0x00) - Driver does not use numbering (e.g., `/dev/dmclk`)
 * **DMDRVI_NUM_MAJOR** (0x01) - Driver uses major number only (e.g., `/dev/dmuart0`)
-* **DMDRVI_NUM_MINOR** (0x02) - Driver uses minor number; requires major (e.g., `/dev/dmspi0/0`)
+* **DMDRVI_NUM_MINOR** (0x02) - Driver uses minor number; must be combined with major (e.g., `/dev/dmspi0/0`)
 
 The driver manages its own namespace and assigns device numbers when creating 
 a context. Each driver can independently use the same major/minor numbers without 
-conflicts.
+conflicts. When a driver uses minor numbers, the DMDRVI_NUM_MINOR flag is set 
+along with DMDRVI_NUM_MAJOR (combined as DMDRVI_NUM_MAJOR | DMDRVI_NUM_MINOR).
 
 ### Access Modes
 
@@ -135,10 +136,12 @@ dmdrvi_context_t ctx = dmdrvi_create(NULL, &dev_num);
 // Check the numbering scheme
 if (dev_num.flags == DMDRVI_NUM_NONE) {
     Dmod_Printf("Device: /dev/dmclk\n");
-} else if (dev_num.flags == DMDRVI_NUM_MAJOR) {
-    Dmod_Printf("Device: /dev/dmuart%d\n", dev_num.major);
-} else if (dev_num.flags == (DMDRVI_NUM_MAJOR | DMDRVI_NUM_MINOR)) {
+} else if (dev_num.flags & DMDRVI_NUM_MINOR) {
+    // Device uses both major and minor (directory structure)
     Dmod_Printf("Device: /dev/dmspi%d/%d\n", dev_num.major, dev_num.minor);
+} else if (dev_num.flags & DMDRVI_NUM_MAJOR) {
+    // Device uses major number only
+    Dmod_Printf("Device: /dev/dmuart%d\n", dev_num.major);
 }
 
 // Open device for reading and writing

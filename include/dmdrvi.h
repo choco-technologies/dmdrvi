@@ -36,7 +36,7 @@ typedef uint8_t dmdrvi_dev_id_t;
  */
 #define DMDRVI_NUM_NONE         0x00    ///< Driver does not use numbering
 #define DMDRVI_NUM_MAJOR        0x01    ///< Driver uses major number only
-#define DMDRVI_NUM_MINOR        0x02    ///< Driver uses minor number (requires major)
+#define DMDRVI_NUM_MINOR        0x02    ///< Driver uses minor number (must be combined with MAJOR)
 
 /**
  * @brief Device number type
@@ -65,7 +65,7 @@ typedef struct
  * scheme it uses (none, major only, or major+minor).
  *
  * @param config Pointer to dmini_context object with configuration parameters (dmini module required to parse them)
- * @param dev_num Output pointer to device number structure - driver fills in major, minor, and flags
+ * @param dev_num Output pointer to device number structure - driver fills in major, minor, and flags (must not be NULL)
  * 
  * @return dmdrvi_context_t Created DMDRVI context
  */
