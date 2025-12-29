@@ -146,11 +146,10 @@ dmod_dmdrvi_dif(1.0, int, _flush, ( dmdrvi_context_t context, void* handle ));
  * @brief Get device status
  *
  * @param context DMDRVI context
- * @param handle Device handle
  * @param stat Pointer to dmdrvi_stat_t structure to fill with status information
  * 
  * @return int Result of the stat operation (errno)
  */
-dmod_dmdrvi_dif(1.0, int, _stat, ( dmdrvi_context_t context, void* handle, dmdrvi_stat_t* stat ));
+dmod_dmdrvi_dif(1.0, int, _stat, ( dmdrvi_context_t context, dmdrvi_stat_t* stat ));
 
 #endif // DMDRVI_H
