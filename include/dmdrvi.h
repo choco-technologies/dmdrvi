@@ -145,16 +145,16 @@ dmod_dmdrvi_dif(1.0, int, _flush, ( dmdrvi_context_t context, void* handle ));
 /**
  * @brief Get device status
  *
- * Gets status information for the device represented by the context.
- * Unlike operations like read/write that require an open handle, stat works
- * directly with the context (similar to how POSIX stat() works with a path
- * without requiring the file to be opened first).
+ * Gets status information for the specified device path without requiring
+ * the device to be opened first (similar to POSIX stat() which works with
+ * a path without requiring fopen()).
  *
- * @param context DMDRVI context representing the device to query
+ * @param context DMDRVI context
+ * @param path Device path (e.g., "/dev/dmuart0", "/dev/dmspi0/0")
  * @param stat Pointer to dmdrvi_stat_t structure to fill with status information
  * 
  * @return int Result of the stat operation (errno)
  */
-dmod_dmdrvi_dif(1.0, int, _stat, ( dmdrvi_context_t context, dmdrvi_stat_t* stat ));
+dmod_dmdrvi_dif(1.0, int, _stat, ( dmdrvi_context_t context, const char* path, dmdrvi_stat_t* stat ));
 
 #endif // DMDRVI_H

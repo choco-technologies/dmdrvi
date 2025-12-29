@@ -23,7 +23,8 @@ size_t dmdrvi_write(dmdrvi_context_t context, void* handle,
 int dmdrvi_ioctl(dmdrvi_context_t context, void* handle, 
                  int command, void* arg);
 int dmdrvi_flush(dmdrvi_context_t context, void* handle);
-int dmdrvi_stat(dmdrvi_context_t context, dmdrvi_stat_t* stat);
+int dmdrvi_stat(dmdrvi_context_t context, const char* path, 
+                dmdrvi_stat_t* stat);
 ```
 
 ## DESCRIPTION
@@ -102,10 +103,10 @@ success or an errno-compatible error code.
 
 **dmdrvi_stat()** retrieves device status information including size and mode. 
 Unlike other operations, stat does not require opening the device first - it 
-works directly with the device context. This is analogous to how POSIX stat() 
-can query file information using a path without requiring fopen() - here the 
-context parameter identifies the device to query. Returns 0 on success or an 
-errno-compatible error code.
+takes a device path parameter (similar to how POSIX stat() takes a file path 
+without requiring fopen()). The path identifies which device to query (e.g., 
+"/dev/dmuart0", "/dev/dmspi0/0"). Returns 0 on success or an errno-compatible 
+error code.
 
 ### Device Status Structure
 
@@ -195,7 +196,7 @@ dmini_destroy(config);
 ```c
 // Get device status (does not require opening)
 dmdrvi_stat_t stat;
-int result = dmdrvi_stat(ctx, &stat);
+int result = dmdrvi_stat(ctx, "/dev/dmuart0", &stat);
 
 if (result == 0) {
     Dmod_Printf("Device size: %u bytes\n", stat.size);
