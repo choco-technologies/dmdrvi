@@ -102,8 +102,10 @@ success or an errno-compatible error code.
 
 **dmdrvi_stat()** retrieves device status information including size and mode. 
 Unlike other operations, stat does not require opening the device first - it 
-works directly with the context, similar to how stat() in Linux does not require 
-calling fopen(). Returns 0 on success or an errno-compatible error code.
+works directly with the device context. This is analogous to how POSIX stat() 
+can query file information using a path without requiring fopen() - here the 
+context parameter identifies the device to query. Returns 0 on success or an 
+errno-compatible error code.
 
 ### Device Status Structure
 
