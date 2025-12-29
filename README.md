@@ -29,7 +29,7 @@ dmdrvi is a driver interface module designed for embedded systems using the DMOD
 - `dmdrvi_write(context, handle, buffer, size)` - Write data to device
 - `dmdrvi_ioctl(context, handle, command, arg)` - Device control operations
 - `dmdrvi_flush(context, handle)` - Flush device buffers
-- `dmdrvi_stat(context, handle, stat)` - Get device status
+- `dmdrvi_stat(context, path, stat)` - Get device status
 
 ### Open Flags
 - `DMDRVI_O_RDONLY` - Open for read only
@@ -70,9 +70,9 @@ size_t written = dmdrvi_write(ctx, handle, write_buffer, sizeof(write_buffer));
 char read_buffer[256];
 size_t read = dmdrvi_read(ctx, handle, read_buffer, sizeof(read_buffer));
 
-// Get device status
+// Get device status (does not require opening the device)
 dmdrvi_stat_t stat;
-int result = dmdrvi_stat(ctx, handle, &stat);
+int result = dmdrvi_stat(ctx, "/dev/dmuart0", &stat);
 Dmod_Printf("Device size: %u bytes\n", stat.size);
 
 // Flush buffers
