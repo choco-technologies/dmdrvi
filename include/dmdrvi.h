@@ -143,6 +143,20 @@ dmod_dmdrvi_dif(1.0, int, _ioctl, ( dmdrvi_context_t context, void* handle, int 
 dmod_dmdrvi_dif(1.0, int, _flush, ( dmdrvi_context_t context, void* handle ));
 
 /**
+ * @brief Check if end of file has been reached
+ *
+ * Some drivers act as streams while others return a fixed set of data.
+ * This function indicates whether the current read position is at the end
+ * of the available data for the given device handle.
+ *
+ * @param context DMDRVI context
+ * @param handle Device handle
+ * 
+ * @return int Non-zero if end of file has been reached, zero otherwise
+ */
+dmod_dmdrvi_dif(1.0, int, _eof, ( dmdrvi_context_t context, void* handle ));
+
+/**
  * @brief Get device status
  *
  * Gets status information for the specified device path without requiring
