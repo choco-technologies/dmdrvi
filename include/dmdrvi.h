@@ -37,15 +37,22 @@ typedef uint8_t dmdrvi_dev_id_t;
 #define DMDRVI_NUM_NONE         0x00    ///< Driver does not use numbering
 #define DMDRVI_NUM_MAJOR        0x01    ///< Driver uses major number only
 #define DMDRVI_NUM_MINOR        0x02    ///< Driver uses minor number (must be combined with MAJOR)
+#define DMDRVI_NUM_ALT_NAME     0x04    ///< Driver provides an alternative file name (alt_name field is valid)
+
+/**
+ * @brief Maximum length of the alternative file name (excluding null terminator)
+ */
+#define DMDRVI_ALT_NAME_MAX_LEN 32
 
 /**
  * @brief Device number type
  */
 typedef struct 
 {
-    dmdrvi_dev_id_t major;  ///< Major device number
-    dmdrvi_dev_id_t minor;  ///< Minor device number
-    uint8_t flags;          ///< Device numbering flags (DMDRVI_NUM_*)
+    dmdrvi_dev_id_t major;                          ///< Major device number
+    dmdrvi_dev_id_t minor;                          ///< Minor device number
+    uint8_t flags;                                  ///< Device numbering flags (DMDRVI_NUM_*)
+    char alt_name[DMDRVI_ALT_NAME_MAX_LEN + 1];    ///< Alternative file name (valid when DMDRVI_NUM_ALT_NAME flag is set)
 } dmdrvi_dev_num_t;
 
 /**
