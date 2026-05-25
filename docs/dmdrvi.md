@@ -16,9 +16,9 @@ void* dmdrvi_open(dmdrvi_context_t context, int flags);
 void dmdrvi_close(dmdrvi_context_t context, void* handle);
 
 size_t dmdrvi_read(dmdrvi_context_t context, void* handle, 
-                   void* buffer, size_t size);
+                   void* buffer, size_t size, uint32_t offset);
 size_t dmdrvi_write(dmdrvi_context_t context, void* handle, 
-                    const void* buffer, size_t size);
+                    const void* buffer, size_t size, uint32_t offset);
 
 int dmdrvi_ioctl(dmdrvi_context_t context, void* handle, 
                  int command, void* arg);
@@ -88,11 +88,13 @@ a device handle or NULL on error.
 **dmdrvi_close()** closes a previously opened device handle and releases 
 associated resources.
 
-**dmdrvi_read()** reads up to *size* bytes from the device into *buffer*. 
-Returns the number of bytes actually read, or 0 on EOF/error.
+**dmdrvi_read()** reads up to *size* bytes from the device into *buffer*, starting
+at the byte position specified by *offset*. Returns the number of bytes actually
+read, or 0 on error.
 
-**dmdrvi_write()** writes up to *size* bytes from *buffer* to the device. 
-Returns the number of bytes actually written, or a negative value on error.
+**dmdrvi_write()** writes up to *size* bytes from *buffer* to the device at the
+byte position specified by *offset*. Returns the number of bytes actually written,
+or a negative value on error.
 
 **dmdrvi_ioctl()** performs device-specific control operations. The *command* 
 parameter specifies the operation, and *arg* provides operation-specific data. 
@@ -153,11 +155,11 @@ void* handle = dmdrvi_open(ctx, DMDRVI_O_RDWR);
 
 // Write data
 const char* msg = "Hello Device!\n";
-size_t written = dmdrvi_write(ctx, handle, msg, strlen(msg));
+size_t written = dmdrvi_write(ctx, handle, msg, strlen(msg), 0);
 
 // Read response
 char buffer[256];
-size_t read = dmdrvi_read(ctx, handle, buffer, sizeof(buffer));
+size_t read = dmdrvi_read(ctx, handle, buffer, sizeof(buffer), 0);
 
 // Close and cleanup
 dmdrvi_close(ctx, handle);
