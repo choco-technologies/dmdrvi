@@ -103,10 +103,11 @@ dmod_dmdrvi_dif(1.0, void, _close, ( dmdrvi_context_t context, void* handle ));
  * @param handle Device handle
  * @param buffer Buffer to read data into
  * @param size Number of bytes to read
+ * @param offset Byte offset from the beginning of the device to read from
  * 
  * @return size_t Number of bytes read
  */
-dmod_dmdrvi_dif(1.0, size_t, _read, ( dmdrvi_context_t context, void* handle, void* buffer, size_t size ));
+dmod_dmdrvi_dif(1.0, size_t, _read, ( dmdrvi_context_t context, void* handle, void* buffer, size_t size, uint32_t offset ));
 
 /**
  * @brief Write to a device
@@ -115,10 +116,11 @@ dmod_dmdrvi_dif(1.0, size_t, _read, ( dmdrvi_context_t context, void* handle, vo
  * @param handle Device handle
  * @param buffer Buffer with data to write
  * @param size Number of bytes to write
+ * @param offset Byte offset from the beginning of the device to write to
  * 
  * @return size_t Number of bytes written
  */
-dmod_dmdrvi_dif(1.0, size_t, _write, ( dmdrvi_context_t context, void* handle, const void* buffer, size_t size ));
+dmod_dmdrvi_dif(1.0, size_t, _write, ( dmdrvi_context_t context, void* handle, const void* buffer, size_t size, uint32_t offset ));
 
 /**
  * @brief Ioctl operation on a device
@@ -141,20 +143,6 @@ dmod_dmdrvi_dif(1.0, int, _ioctl, ( dmdrvi_context_t context, void* handle, int 
  * @return int Result of the flush operation (errno)
  */
 dmod_dmdrvi_dif(1.0, int, _flush, ( dmdrvi_context_t context, void* handle ));
-
-/**
- * @brief Check if end of file has been reached
- *
- * Some drivers act as streams while others return a fixed set of data.
- * This function indicates whether the current read position is at the end
- * of the available data for the given device handle.
- *
- * @param context DMDRVI context
- * @param handle Device handle
- * 
- * @return int Non-zero if end of file has been reached, zero otherwise
- */
-dmod_dmdrvi_dif(1.0, int, _eof, ( dmdrvi_context_t context, void* handle ));
 
 /**
  * @brief Get device status
