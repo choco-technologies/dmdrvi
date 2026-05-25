@@ -45,9 +45,10 @@ minor numbers, along with flags that indicate which numbering scheme the driver 
 
 ```c
 typedef struct {
-    dmdrvi_dev_id_t major;  ///< Major device number (channel)
-    dmdrvi_dev_id_t minor;  ///< Minor device number (specific config)
-    uint8_t flags;          ///< Device numbering flags
+    dmdrvi_dev_id_t major;                        ///< Major device number (channel)
+    dmdrvi_dev_id_t minor;                        ///< Minor device number (specific config)
+    uint8_t flags;                                ///< Device numbering flags
+    char alt_name[DMDRVI_ALT_NAME_MAX_LEN + 1];  ///< Alternative file name (valid when DMDRVI_NUM_ALT_NAME is set)
 } dmdrvi_dev_num_t;
 ```
 
@@ -56,6 +57,7 @@ typedef struct {
 * **DMDRVI_NUM_NONE** (0x00) - Driver does not use numbering (e.g., `/dev/dmclk`)
 * **DMDRVI_NUM_MAJOR** (0x01) - Driver uses major number only (e.g., `/dev/dmuart0`)
 * **DMDRVI_NUM_MINOR** (0x02) - Driver uses minor number; must be combined with major (e.g., `/dev/dmspi0/0`)
+* **DMDRVI_NUM_ALT_NAME** (0x04) - Driver provides an alternative file name via the `alt_name` field (e.g., `/dev/my_sensor`)
 
 The driver manages its own namespace and assigns device numbers when creating 
 a context. Each driver can independently use the same major/minor numbers without 
@@ -148,6 +150,11 @@ if (dev_num.flags == DMDRVI_NUM_NONE) {
 } else if (dev_num.flags & DMDRVI_NUM_MAJOR) {
     // Device uses major number only
     Dmod_Printf("Device: /dev/dmuart%d\n", dev_num.major);
+}
+
+// Check if driver provides an alternative file name
+if (dev_num.flags & DMDRVI_NUM_ALT_NAME) {
+    Dmod_Printf("Alternative name: /dev/%s\n", dev_num.alt_name);
 }
 
 // Open device for reading and writing
@@ -299,6 +306,12 @@ numbering scheme to use based on its needs:
 * Driver uses both major and minor numbers
 * Creates directory for major number, files for each minor number
 * Example: `/dev/dmspi0/0`, `/dev/dmspi0/1` (SPI driver with different configs)
+
+**Alternative File Name (DMDRVI_NUM_ALT_NAME)**
+* Driver provides a human-friendly alternative name for the device file (max 32 characters)
+* The `alt_name` field in `dmdrvi_dev_num_t` contains the alternative name
+* Can be combined with other flags
+* Example: `/dev/my_sensor` (a GPIO pin driver configured for a specific sensor)
 
 ### Device Number Namespaces
 

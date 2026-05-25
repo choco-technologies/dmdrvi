@@ -59,6 +59,11 @@ if (dev_num.flags == DMDRVI_NUM_NONE) {
     Dmod_Printf("Device: /dev/dmuart%d\n", dev_num.major);
 }
 
+// Check if driver provides a human-friendly alternative file name
+if (dev_num.flags & DMDRVI_NUM_ALT_NAME) {
+    Dmod_Printf("Alternative name: /dev/%s\n", dev_num.alt_name);
+}
+
 // Open device for reading and writing
 void* handle = dmdrvi_open(ctx, DMDRVI_O_RDWR);
 
@@ -143,6 +148,12 @@ The driver manages device numbering within its own namespace. Each driver decide
    - Driver uses both major and minor numbers
    - Creates directory for major number, files for each minor number
    - Example: `/dev/dmspi0/0`, `/dev/dmspi0/1`, `/dev/dmspi1/0`
+
+4. **Alternative File Name** (DMDRVI_NUM_ALT_NAME):
+   - Driver provides a human-friendly alternative name for the device file (max 32 characters)
+   - The `alt_name` field in `dmdrvi_dev_num_t` contains the alternative name
+   - Can be combined with other flags
+   - Example: `/dev/my_sensor`
 
 ### Device Number Assignment
 
