@@ -166,4 +166,36 @@ dmod_dmdrvi_dif(1.0, int, _flush, ( dmdrvi_context_t context, void* handle ));
  */
 dmod_dmdrvi_dif(1.0, int, _stat, ( dmdrvi_context_t context, const char* path, dmdrvi_stat_t* stat ));
 
+/**
+ * @brief Put device into sleep mode
+ *
+ * Puts the device into a low-power sleep state to conserve energy.
+ * The device can be awakened later using dmdrvi_wake_up().
+ * Device behavior during sleep is driver-specific but typically includes:
+ * - Disabling device clocks
+ * - Entering low-power mode
+ * - Preserving device state for later restoration
+ *
+ * @param context DMDRVI context
+ * 
+ * @return int 0 on success, errno-compatible error code otherwise
+ */
+dmod_dmdrvi_dif(1.0, int, _sleep, ( dmdrvi_context_t context ));
+
+/**
+ * @brief Wake device from sleep mode
+ *
+ * Wakes the device from a low-power sleep state back to normal operation.
+ * The device must have been previously put to sleep using dmdrvi_sleep().
+ * Device behavior on wake-up is driver-specific but typically includes:
+ * - Re-enabling device clocks
+ * - Restoring device state
+ * - Returning to normal power mode
+ *
+ * @param context DMDRVI context
+ * 
+ * @return int 0 on success, errno-compatible error code otherwise
+ */
+dmod_dmdrvi_dif(1.0, int, _wake_up, ( dmdrvi_context_t context ));
+
 #endif // DMDRVI_H

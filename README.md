@@ -12,6 +12,7 @@ dmdrvi is a driver interface module designed for embedded systems using the DMOD
 - **Device Identification**: Major/minor device number system
 - **Flexible Access Modes**: Read-only, write-only, and read-write support
 - **Standard Operations**: open, close, read, write, ioctl, flush, stat
+- **Power Management**: Sleep and wake_up operations for energy conservation
 - **Configuration Support**: Integration with dmini for device configuration
 - **SAL-Compatible**: Uses only DMOD SAL functions
 - **Lightweight**: Minimal memory footprint suitable for embedded systems
@@ -30,6 +31,10 @@ dmdrvi is a driver interface module designed for embedded systems using the DMOD
 - `dmdrvi_ioctl(context, handle, command, arg)` - Device control operations
 - `dmdrvi_flush(context, handle)` - Flush device buffers
 - `dmdrvi_stat(context, path, stat)` - Get device status
+
+### Power Management
+- `dmdrvi_sleep(context)` - Put device into low-power sleep mode
+- `dmdrvi_wake_up(context)` - Wake device from sleep mode
 
 ### Open Flags
 - `DMDRVI_O_RDONLY` - Open for read only
@@ -85,6 +90,20 @@ dmdrvi_flush(ctx, handle);
 
 // Close device
 dmdrvi_close(ctx, handle);
+
+// Put device to sleep to save power
+int sleep_result = dmdrvi_sleep(ctx);
+if (sleep_result == 0) {
+    Dmod_Printf("Device entered sleep mode\n");
+}
+
+// ... device is in low-power state ...
+
+// Wake up device when needed
+int wake_result = dmdrvi_wake_up(ctx);
+if (wake_result == 0) {
+    Dmod_Printf("Device woke up from sleep\n");
+}
 
 // Free context
 dmdrvi_free(ctx);
