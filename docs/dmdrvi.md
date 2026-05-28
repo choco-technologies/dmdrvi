@@ -25,6 +25,9 @@ int dmdrvi_ioctl(dmdrvi_context_t context, void* handle,
 int dmdrvi_flush(dmdrvi_context_t context, void* handle);
 int dmdrvi_stat(dmdrvi_context_t context, const char* path, 
                 dmdrvi_stat_t* stat);
+
+int dmdrvi_sleep(dmdrvi_context_t context);
+int dmdrvi_wake_up(dmdrvi_context_t context);
 ```
 
 ## DESCRIPTION
@@ -112,6 +115,20 @@ without requiring fopen()). The path identifies which device to query (e.g.,
 "/dev/dmuart0", "/dev/dmspi0/0"). Returns 0 on success or an errno-compatible 
 error code.
 
+### Power Management
+
+**dmdrvi_sleep()** puts the device into a low-power sleep state to conserve 
+energy. The device behavior during sleep is driver-specific but typically 
+includes disabling device clocks, entering low-power mode, and preserving 
+device state for later restoration. The device can be awakened later using 
+dmdrvi_wake_up(). Returns 0 on success or an errno-compatible error code.
+
+**dmdrvi_wake_up()** wakes the device from a low-power sleep state back to 
+normal operation. The device must have been previously put to sleep using 
+dmdrvi_sleep(). Device behavior on wake-up is driver-specific but typically 
+includes re-enabling device clocks, restoring device state, and returning to 
+normal power mode. Returns 0 on success or an errno-compatible error code.
+
 ### Device Status Structure
 
 ```c
@@ -129,6 +146,7 @@ Functions return values as follows:
 * **dmdrvi_open()** - Device handle on success, NULL on error
 * **dmdrvi_read()/write()** - Number of bytes transferred, or 0/negative on error
 * **dmdrvi_ioctl()/flush()/stat()** - 0 on success, errno-compatible error code otherwise
+* **dmdrvi_sleep()/wake_up()** - 0 on success, errno-compatible error code otherwise
 
 ## EXAMPLES
 
@@ -283,6 +301,52 @@ dmdrvi_free(uart0_ctx);
 dmdrvi_free(uart1_ctx);
 dmdrvi_free(spi0_cs0_ctx);
 dmdrvi_free(spi0_cs1_ctx);
+```
+
+### Power Management
+
+```c
+#include "dmdrvi.h"
+
+// Create driver context
+dmdrvi_dev_num_t dev_num;
+dmdrvi_context_t ctx = dmdrvi_create(NULL, &dev_num);
+
+// Open and use device
+void* handle = dmdrvi_open(ctx, DMDRVI_O_RDWR);
+
+// Perform operations
+char data[] = "Hello Device!";
+dmdrvi_write(ctx, handle, data, sizeof(data), 0);
+
+// Close device handle before sleeping
+dmdrvi_close(ctx, handle);
+
+// Put device to sleep to save power
+int result = dmdrvi_sleep(ctx);
+if (result == 0) {
+    Dmod_Printf("Device entered sleep mode\n");
+} else {
+    Dmod_Printf("Failed to enter sleep mode: %d\n", result);
+}
+
+// ... device is in low-power state, conserving energy ...
+// ... wait for some time or until an event occurs ...
+
+// Wake up device when needed again
+result = dmdrvi_wake_up(ctx);
+if (result == 0) {
+    Dmod_Printf("Device woke up successfully\n");
+} else {
+    Dmod_Printf("Failed to wake up device: %d\n", result);
+}
+
+// Re-open device and continue operations
+handle = dmdrvi_open(ctx, DMDRVI_O_RDWR);
+// ... continue using device ...
+
+dmdrvi_close(ctx, handle);
+dmdrvi_free(ctx);
 ```
 
 ## DEVICE CHANNELS AND CONFIGURATIONS
