@@ -13,6 +13,7 @@ dmdrvi is a driver interface module designed for embedded systems using the DMOD
 - **Flexible Access Modes**: Read-only, write-only, and read-write support
 - **Standard Operations**: open, close, read, write, ioctl, flush, stat
 - **Configuration Support**: Integration with dmini for device configuration
+- **Dynamic Configuration Notifications**: Drivers can inform dmdevfs when a configuration becomes available or unavailable at runtime
 - **SAL-Compatible**: Uses only DMOD SAL functions
 - **Lightweight**: Minimal memory footprint suitable for embedded systems
 
@@ -30,6 +31,10 @@ dmdrvi is a driver interface module designed for embedded systems using the DMOD
 - `dmdrvi_ioctl(context, handle, command, arg)` - Device control operations
 - `dmdrvi_flush(context, handle)` - Flush device buffers
 - `dmdrvi_stat(context, path, stat)` - Get device status
+
+### Dynamic Configuration Notifications (MAL interface, driver -> dmdevfs)
+- `dmdrvi_config_available(driver_name, config)` - Driver informs dmdevfs that a new configuration is available
+- `dmdrvi_context_unavailable(context)` - Driver informs dmdevfs that a previously created context is no longer available
 
 ### Open Flags
 - `DMDRVI_O_RDONLY` - Open for read only

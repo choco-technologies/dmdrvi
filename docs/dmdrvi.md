@@ -25,6 +25,10 @@ int dmdrvi_ioctl(dmdrvi_context_t context, void* handle,
 int dmdrvi_flush(dmdrvi_context_t context, void* handle);
 int dmdrvi_stat(dmdrvi_context_t context, const char* path, 
                 dmdrvi_stat_t* stat);
+
+/* MAL interfaces - implemented by dmdevfs, called by drivers */
+void dmdrvi_config_available(const char* driver_name, dmini_context_t config);
+void dmdrvi_context_unavailable(dmdrvi_context_t context);
 ```
 
 ## DESCRIPTION
@@ -111,6 +115,42 @@ takes a device path parameter (similar to how POSIX stat() takes a file path
 without requiring fopen()). The path identifies which device to query (e.g., 
 "/dev/dmuart0", "/dev/dmspi0/0"). Returns 0 on success or an errno-compatible 
 error code.
+
+### Dynamic Configuration Notifications (MAL Interface)
+
+All functions described so far are DIF (Dmod Interface) functions: dmdevfs
+(or an application) calls them, and each driver module provides its own
+implementation. `dmdrvi_config_available()` and `dmdrvi_context_unavailable()`
+go the opposite direction: they are MAL (Module Abstraction Layer)
+functions, called *by the driver* and implemented once, by dmdevfs. Since
+MAL only supports a single implementation (unlike DIF's multiple
+implementations), a driver identifies itself with `driver_name` where
+needed so dmdevfs knows which driver the notification belongs to.
+
+**dmdrvi_config_available()** is called by a driver when it detects that a
+new configuration has become available at runtime (e.g. a hot-plugged
+sub-device or a dynamically discovered channel). `driver_name` identifies
+the calling driver, and `config` is a dmini_context_t describing the new
+configuration - typically the same kind of configuration object that would
+be passed to `dmdrvi_create()`. dmdevfs can use this notification to create
+a context for the new configuration (e.g. by calling `dmdrvi_create()` on
+the named driver) and expose the resulting device file.
+
+**dmdrvi_context_unavailable()** is the counterpart, called by a driver to
+inform dmdevfs that a context it previously created - typically in response
+to a prior `dmdrvi_config_available()` notification, but this may just as
+well be a context returned directly from an earlier `dmdrvi_create()` call -
+is no longer valid (e.g. the hot-plugged sub-device was removed). Unlike
+`dmdrvi_config_available()`, this is identified directly by `context`
+rather than by configuration, since by this point dmdevfs already holds the
+context returned from `dmdrvi_create()`. dmdevfs should remove the
+corresponding device file and stop using the context; the driver remains
+responsible for eventually freeing it with `dmdrvi_free()`.
+
+```c
+void dmdrvi_config_available(const char* driver_name, dmini_context_t config);
+void dmdrvi_context_unavailable(dmdrvi_context_t context);
+```
 
 ### Device Status Structure
 

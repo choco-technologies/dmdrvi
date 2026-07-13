@@ -166,4 +166,36 @@ dmod_dmdrvi_dif(1.0, int, _flush, ( dmdrvi_context_t context, void* handle ));
  */
 dmod_dmdrvi_dif(1.0, int, _stat, ( dmdrvi_context_t context, const char* path, dmdrvi_stat_t* stat ));
 
+/**
+ * @brief Notify that a new device configuration is available
+ *
+ * This is a MAL (Module Abstraction Layer) interface, implemented by the
+ * dmdevfs layer - the opposite direction of the other DMDRVI functions
+ * above, which are called by dmdevfs and implemented by the driver. It
+ * allows a driver to actively inform dmdevfs that a new configuration
+ * became available (e.g. a hot-plugged sub-device or a dynamically
+ * discovered channel), so that dmdevfs can act on it (e.g. call
+ * dmdrvi_create() for it and expose the resulting device file).
+ *
+ * @param driver_name Name of the driver (module) the configuration belongs to
+ * @param config Pointer to dmini_context object with the new configuration parameters
+ */
+dmod_dmdrvi_mal(1.0, void, _config_available, ( const char* driver_name, dmini_context_t config ));
+
+/**
+ * @brief Notify that a driver context is no longer available
+ *
+ * This is a MAL (Module Abstraction Layer) interface, implemented by the
+ * dmdevfs layer. It is the counterpart of dmdrvi_config_available() and
+ * allows a driver to inform dmdevfs that a context it previously created
+ * (e.g. in response to dmdrvi_config_available(), or returned directly from
+ * dmdrvi_create()) is no longer valid - for example because the underlying
+ * hot-plugged sub-device was removed. dmdevfs should remove the
+ * corresponding device file and stop using the context; the driver is
+ * responsible for freeing it (dmdrvi_free()).
+ *
+ * @param context DMDRVI context that is no longer available
+ */
+dmod_dmdrvi_mal(1.0, void, _context_unavailable, ( dmdrvi_context_t context ));
+
 #endif // DMDRVI_H
