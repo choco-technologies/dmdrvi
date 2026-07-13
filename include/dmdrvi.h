@@ -88,12 +88,17 @@ dmod_dmdrvi_dif(1.0, void, _free, ( dmdrvi_context_t context ));
 /**
  * @brief Open a device
  *
+ * A single driver context can expose more than one device (e.g. a
+ * dynamically discovered sub-device announced via dmdrvi_device_available()),
+ * so dev_num identifies which one of the context's devices is being opened.
+ *
  * @param context DMDRVI context
  * @param flags Open flags  (DMDRVI_O_RDONLY, DMDRVI_O_WRONLY, DMDRVI_O_RDWR)
- * 
+ * @param dev_num Device number identifying which device within the context to open
+ *
  * @return void* Device handle
  */
-dmod_dmdrvi_dif(1.0, void*, _open, ( dmdrvi_context_t context, int flags ));
+dmod_dmdrvi_dif(1.0, void*, _open, ( dmdrvi_context_t context, int flags, const dmdrvi_dev_num_t* dev_num ));
 
 /**
  * @brief Close a device
@@ -167,35 +172,42 @@ dmod_dmdrvi_dif(1.0, int, _flush, ( dmdrvi_context_t context, void* handle ));
 dmod_dmdrvi_dif(1.0, int, _stat, ( dmdrvi_context_t context, const char* path, dmdrvi_stat_t* stat ));
 
 /**
- * @brief Notify that a new device configuration is available
+ * @brief Notify that a new device is available within a driver context
  *
  * This is a MAL (Module Abstraction Layer) interface, implemented by the
  * dmdevfs layer - the opposite direction of the other DMDRVI functions
  * above, which are called by dmdevfs and implemented by the driver. It
- * allows a driver to actively inform dmdevfs that a new configuration
- * became available (e.g. a hot-plugged sub-device or a dynamically
- * discovered channel), so that dmdevfs can act on it (e.g. call
- * dmdrvi_create() for it and expose the resulting device file).
+ * allows a driver to actively inform dmdevfs that a new device became
+ * available within an already existing context (e.g. a hot-plugged
+ * sub-device or a dynamically discovered channel), so that dmdevfs can
+ * expose a corresponding device file for it.
  *
- * @param driver_name Name of the driver (module) the configuration belongs to
- * @param config Pointer to dmini_context object with the new configuration parameters
+ * The driver does not create a new context for this device - context is
+ * where dmdevfs first learned about the driver (via dmdrvi_create()), which
+ * is also what ties the notification to the right dmdevfs instance in
+ * setups where dmdevfs is mounted more than once. dev_num identifies the
+ * new device within that context and must later be passed to
+ * dmdrvi_open() to open it.
+ *
+ * @param context DMDRVI context the new device belongs to
+ * @param dev_num Device number identifying the newly available device
  */
-dmod_dmdrvi_mal(1.0, void, _config_available, ( const char* driver_name, dmini_context_t config ));
+dmod_dmdrvi_mal(1.0, void, _device_available, ( dmdrvi_context_t context, const dmdrvi_dev_num_t* dev_num ));
 
 /**
- * @brief Notify that a driver context is no longer available
+ * @brief Notify that a device is no longer available within a driver context
  *
  * This is a MAL (Module Abstraction Layer) interface, implemented by the
- * dmdevfs layer. It is the counterpart of dmdrvi_config_available() and
- * allows a driver to inform dmdevfs that a context it previously created
- * (e.g. in response to dmdrvi_config_available(), or returned directly from
- * dmdrvi_create()) is no longer valid - for example because the underlying
- * hot-plugged sub-device was removed. dmdevfs should remove the
- * corresponding device file and stop using the context; the driver is
- * responsible for freeing it (dmdrvi_free()).
+ * dmdevfs layer. It is the counterpart of dmdrvi_device_available() and
+ * allows a driver to inform dmdevfs that a device previously announced
+ * (or present from the initial dmdrvi_create() call) is no longer valid -
+ * for example because the underlying hot-plugged sub-device was removed.
+ * dmdevfs should remove the corresponding device file; the context itself
+ * remains valid and is only freed via dmdrvi_free().
  *
- * @param context DMDRVI context that is no longer available
+ * @param context DMDRVI context the device belongs to
+ * @param dev_num Device number identifying the device that is no longer available
  */
-dmod_dmdrvi_mal(1.0, void, _context_unavailable, ( dmdrvi_context_t context ));
+dmod_dmdrvi_mal(1.0, void, _device_unavailable, ( dmdrvi_context_t context, const dmdrvi_dev_num_t* dev_num ));
 
 #endif // DMDRVI_H

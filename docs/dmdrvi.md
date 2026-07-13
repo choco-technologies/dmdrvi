@@ -12,7 +12,7 @@ dmdrvi - DMOD Driver Interface Module
 dmdrvi_context_t dmdrvi_create(void* config, const dmdrvi_dev_num_t* dev_num);
 void dmdrvi_free(dmdrvi_context_t context);
 
-void* dmdrvi_open(dmdrvi_context_t context, int flags);
+void* dmdrvi_open(dmdrvi_context_t context, int flags, const dmdrvi_dev_num_t* dev_num);
 void dmdrvi_close(dmdrvi_context_t context, void* handle);
 
 size_t dmdrvi_read(dmdrvi_context_t context, void* handle, 
@@ -27,8 +27,8 @@ int dmdrvi_stat(dmdrvi_context_t context, const char* path,
                 dmdrvi_stat_t* stat);
 
 /* MAL interfaces - implemented by dmdevfs, called by drivers */
-void dmdrvi_config_available(const char* driver_name, dmini_context_t config);
-void dmdrvi_context_unavailable(dmdrvi_context_t context);
+void dmdrvi_device_available(dmdrvi_context_t context, const dmdrvi_dev_num_t* dev_num);
+void dmdrvi_device_unavailable(dmdrvi_context_t context, const dmdrvi_dev_num_t* dev_num);
 ```
 
 ## DESCRIPTION
@@ -88,8 +88,12 @@ which numbering scheme it uses. Returns a context pointer or NULL on error.
 
 ### Device Operations
 
-**dmdrvi_open()** opens the device with the specified access flags. Returns 
-a device handle or NULL on error.
+**dmdrvi_open()** opens the device with the specified access flags. *dev_num*
+identifies which device within the context to open - this is normally the
+dev_num returned by dmdrvi_create(), but for a device announced dynamically
+via dmdrvi_device_available() it is the dev_num passed to that call, since
+the driver does not create a separate context per device. Returns a device
+handle or NULL on error.
 
 **dmdrvi_close()** closes a previously opened device handle and releases 
 associated resources.
@@ -116,40 +120,42 @@ without requiring fopen()). The path identifies which device to query (e.g.,
 "/dev/dmuart0", "/dev/dmspi0/0"). Returns 0 on success or an errno-compatible 
 error code.
 
-### Dynamic Configuration Notifications (MAL Interface)
+### Dynamic Device Notifications (MAL Interface)
 
 All functions described so far are DIF (Dmod Interface) functions: dmdevfs
 (or an application) calls them, and each driver module provides its own
-implementation. `dmdrvi_config_available()` and `dmdrvi_context_unavailable()`
+implementation. `dmdrvi_device_available()` and `dmdrvi_device_unavailable()`
 go the opposite direction: they are MAL (Module Abstraction Layer)
-functions, called *by the driver* and implemented once, by dmdevfs. Since
-MAL only supports a single implementation (unlike DIF's multiple
-implementations), a driver identifies itself with `driver_name` where
-needed so dmdevfs knows which driver the notification belongs to.
+functions, called *by the driver* and implemented once, by dmdevfs.
 
-**dmdrvi_config_available()** is called by a driver when it detects that a
-new configuration has become available at runtime (e.g. a hot-plugged
-sub-device or a dynamically discovered channel). `driver_name` identifies
-the calling driver, and `config` is a dmini_context_t describing the new
-configuration - typically the same kind of configuration object that would
-be passed to `dmdrvi_create()`. dmdevfs can use this notification to create
-a context for the new configuration (e.g. by calling `dmdrvi_create()` on
-the named driver) and expose the resulting device file.
+Both functions are scoped to an existing `context` - the one dmdevfs
+obtained earlier from `dmdrvi_create()` - rather than to a driver name or a
+fresh configuration. This matters because dmdevfs can be mounted more than
+once in the filesystem; since `context` was handed out by the specific
+dmdevfs instance that originally created it, a notification tied to that
+context always reaches the right instance, with no separate lookup needed.
+Consequently the driver does not create a new context for a dynamically
+discovered device - it reuses its existing context and identifies the
+device with a `dmdrvi_dev_num_t`, which must later be passed to
+`dmdrvi_open()` (see above) to open that specific device.
 
-**dmdrvi_context_unavailable()** is the counterpart, called by a driver to
-inform dmdevfs that a context it previously created - typically in response
-to a prior `dmdrvi_config_available()` notification, but this may just as
-well be a context returned directly from an earlier `dmdrvi_create()` call -
-is no longer valid (e.g. the hot-plugged sub-device was removed). Unlike
-`dmdrvi_config_available()`, this is identified directly by `context`
-rather than by configuration, since by this point dmdevfs already holds the
-context returned from `dmdrvi_create()`. dmdevfs should remove the
-corresponding device file and stop using the context; the driver remains
-responsible for eventually freeing it with `dmdrvi_free()`.
+**dmdrvi_device_available()** is called by a driver when it detects that a
+new device has become available at runtime within an existing context (e.g.
+a hot-plugged sub-device or a dynamically discovered channel). `dev_num`
+identifies the new device (major/minor/alt_name, as usual). dmdevfs can use
+this notification to expose a corresponding device file, which drivers can
+later open by passing this same `dev_num` to `dmdrvi_open()`.
+
+**dmdrvi_device_unavailable()** is the counterpart, called by a driver to
+inform dmdevfs that a device previously announced (or present since the
+initial `dmdrvi_create()` call) is no longer valid (e.g. the hot-plugged
+sub-device was removed). dmdevfs should remove the corresponding device
+file; the context itself remains valid and is only freed via
+`dmdrvi_free()`.
 
 ```c
-void dmdrvi_config_available(const char* driver_name, dmini_context_t config);
-void dmdrvi_context_unavailable(dmdrvi_context_t context);
+void dmdrvi_device_available(dmdrvi_context_t context, const dmdrvi_dev_num_t* dev_num);
+void dmdrvi_device_unavailable(dmdrvi_context_t context, const dmdrvi_dev_num_t* dev_num);
 ```
 
 ### Device Status Structure
@@ -198,7 +204,7 @@ if (dev_num.flags & DMDRVI_NUM_ALT_NAME) {
 }
 
 // Open device for reading and writing
-void* handle = dmdrvi_open(ctx, DMDRVI_O_RDWR);
+void* handle = dmdrvi_open(ctx, DMDRVI_O_RDWR, &dev_num);
 
 // Write data
 const char* msg = "Hello Device!\n";
@@ -231,7 +237,7 @@ dmdrvi_context_t driver = dmdrvi_create(config, &dev_num);
 // Config contains device-specific settings (baudrate, mode, speed, etc.)
 
 // Open and use device
-void* handle = dmdrvi_open(driver, DMDRVI_O_RDWR);
+void* handle = dmdrvi_open(driver, DMDRVI_O_RDWR, &dev_num);
 // ... perform operations ...
 dmdrvi_close(driver, handle);
 
@@ -257,7 +263,7 @@ if (result == 0) {
 
 ```c
 // Open device
-void* handle = dmdrvi_open(ctx, DMDRVI_O_RDWR);
+void* handle = dmdrvi_open(ctx, DMDRVI_O_RDWR, &dev_num);
 
 // Set baud rate (example ioctl command)
 #define IOCTL_SET_BAUDRATE 0x5001
@@ -303,11 +309,11 @@ dmdrvi_context_t spi0_cs1_ctx = dmdrvi_create(spi0_cs1_config, &spi0_cs1_num);
 // Device files: /dev/dmspi0/0, /dev/dmspi0/1
 
 // Open all devices
-void* clk_handle = dmdrvi_open(clk_ctx, DMDRVI_O_RDWR);
-void* uart0_handle = dmdrvi_open(uart0_ctx, DMDRVI_O_RDWR);
-void* uart1_handle = dmdrvi_open(uart1_ctx, DMDRVI_O_RDWR);
-void* spi0_cs0_handle = dmdrvi_open(spi0_cs0_ctx, DMDRVI_O_RDWR);
-void* spi0_cs1_handle = dmdrvi_open(spi0_cs1_ctx, DMDRVI_O_RDWR);
+void* clk_handle = dmdrvi_open(clk_ctx, DMDRVI_O_RDWR, &clk_num);
+void* uart0_handle = dmdrvi_open(uart0_ctx, DMDRVI_O_RDWR, &uart0_num);
+void* uart1_handle = dmdrvi_open(uart1_ctx, DMDRVI_O_RDWR, &uart1_num);
+void* spi0_cs0_handle = dmdrvi_open(spi0_cs0_ctx, DMDRVI_O_RDWR, &spi0_cs0_num);
+void* spi0_cs1_handle = dmdrvi_open(spi0_cs1_ctx, DMDRVI_O_RDWR, &spi0_cs1_num);
 
 // Use devices...
 
@@ -323,6 +329,35 @@ dmdrvi_free(uart0_ctx);
 dmdrvi_free(uart1_ctx);
 dmdrvi_free(spi0_cs0_ctx);
 dmdrvi_free(spi0_cs1_ctx);
+```
+
+### Dynamic Device Notification (Hot-Plug)
+
+```c
+// A bus driver (e.g. USB host) has a single context for the whole
+// controller and dynamically discovers sub-devices at runtime.
+dmdrvi_dev_num_t bus_num;
+dmdrvi_context_t bus_ctx = dmdrvi_create(NULL, &bus_num);
+
+// A new sub-device is detected on the bus - the driver picks a dev_num
+// for it (e.g. bus_num.major with a new minor) and notifies dmdevfs.
+// It does NOT create a separate context for it.
+dmdrvi_dev_num_t child_num = bus_num;
+child_num.flags |= DMDRVI_NUM_MINOR;
+child_num.minor = 0;
+dmdrvi_device_available(bus_ctx, &child_num);
+
+// dmdevfs exposes a device file for child_num and, when opened, dmdevfs/
+// the application passes the same dev_num back through the shared context:
+void* child_handle = dmdrvi_open(bus_ctx, DMDRVI_O_RDWR, &child_num);
+// ... use child_handle ...
+dmdrvi_close(bus_ctx, child_handle);
+
+// Later, the sub-device is unplugged:
+dmdrvi_device_unavailable(bus_ctx, &child_num);
+
+// The bus context itself stays valid until the driver is torn down
+dmdrvi_free(bus_ctx);
 ```
 
 ## DEVICE CHANNELS AND CONFIGURATIONS

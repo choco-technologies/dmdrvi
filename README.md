@@ -13,7 +13,7 @@ dmdrvi is a driver interface module designed for embedded systems using the DMOD
 - **Flexible Access Modes**: Read-only, write-only, and read-write support
 - **Standard Operations**: open, close, read, write, ioctl, flush, stat
 - **Configuration Support**: Integration with dmini for device configuration
-- **Dynamic Configuration Notifications**: Drivers can inform dmdevfs when a configuration becomes available or unavailable at runtime
+- **Dynamic Device Notifications**: Drivers can inform dmdevfs when a device becomes available or unavailable at runtime within an existing context
 - **SAL-Compatible**: Uses only DMOD SAL functions
 - **Lightweight**: Minimal memory footprint suitable for embedded systems
 
@@ -24,7 +24,7 @@ dmdrvi is a driver interface module designed for embedded systems using the DMOD
 - `dmdrvi_free(context)` - Free driver context
 
 ### Device Operations
-- `dmdrvi_open(context, flags)` - Open device with specified flags
+- `dmdrvi_open(context, flags, dev_num)` - Open device with specified flags
 - `dmdrvi_close(context, handle)` - Close device handle
 - `dmdrvi_read(context, handle, buffer, size)` - Read data from device
 - `dmdrvi_write(context, handle, buffer, size)` - Write data to device
@@ -32,9 +32,9 @@ dmdrvi is a driver interface module designed for embedded systems using the DMOD
 - `dmdrvi_flush(context, handle)` - Flush device buffers
 - `dmdrvi_stat(context, path, stat)` - Get device status
 
-### Dynamic Configuration Notifications (MAL interface, driver -> dmdevfs)
-- `dmdrvi_config_available(driver_name, config)` - Driver informs dmdevfs that a new configuration is available
-- `dmdrvi_context_unavailable(context)` - Driver informs dmdevfs that a previously created context is no longer available
+### Dynamic Device Notifications (MAL interface, driver -> dmdevfs)
+- `dmdrvi_device_available(context, dev_num)` - Driver informs dmdevfs that a new device is available within an existing context
+- `dmdrvi_device_unavailable(context, dev_num)` - Driver informs dmdevfs that a device is no longer available
 
 ### Open Flags
 - `DMDRVI_O_RDONLY` - Open for read only
@@ -70,7 +70,7 @@ if (dev_num.flags & DMDRVI_NUM_ALT_NAME) {
 }
 
 // Open device for reading and writing
-void* handle = dmdrvi_open(ctx, DMDRVI_O_RDWR);
+void* handle = dmdrvi_open(ctx, DMDRVI_O_RDWR, &dev_num);
 
 // Write data to device
 char write_buffer[] = "Hello Device";
