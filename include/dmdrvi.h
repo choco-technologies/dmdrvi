@@ -210,4 +210,27 @@ dmod_dmdrvi_mal(1.0, void, _device_available, ( dmdrvi_context_t context, const 
  */
 dmod_dmdrvi_mal(1.0, void, _device_unavailable, ( dmdrvi_context_t context, const dmdrvi_dev_num_t* dev_num ));
 
+/**
+ * @brief Get the absolute path under which a device is exposed
+ *
+ * This is a MAL (Module Abstraction Layer) interface, implemented by the
+ * dmdevfs layer - the opposite direction of the other DMDRVI functions
+ * above, which are called by dmdevfs and implemented by the driver. It
+ * allows a driver to actively ask dmdevfs for the fully qualified path of
+ * one of its own devices (e.g. to log it, or to pass it on to something
+ * else that needs to open the device by path).
+ *
+ * dmdevfs only knows the path relative to its own mount root; it resolves
+ * the absolute path by asking whoever mounted it (e.g. dmvfs) for the
+ * mount's own path and prefixing it.
+ *
+ * @param context DMDRVI context the device belongs to
+ * @param dev_num Device number identifying which device within the context to query
+ * @param path_buffer Buffer to receive the absolute, null-terminated path
+ * @param buffer_size Size of path_buffer
+ *
+ * @return 0 on success, negative value on failure (e.g. device or context not found, buffer too small)
+ */
+dmod_dmdrvi_mal(1.0, int, _get_path, ( dmdrvi_context_t context, const dmdrvi_dev_num_t* dev_num, char* path_buffer, size_t buffer_size ));
+
 #endif // DMDRVI_H
