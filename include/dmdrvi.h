@@ -211,26 +211,32 @@ dmod_dmdrvi_mal(1.0, void, _device_available, ( dmdrvi_context_t context, const 
 dmod_dmdrvi_mal(1.0, void, _device_unavailable, ( dmdrvi_context_t context, const dmdrvi_dev_num_t* dev_num ));
 
 /**
- * @brief Get the absolute path under which a device is exposed
+ * @brief Notify a driver that the absolute path of one of its devices is now known
  *
- * This is a MAL (Module Abstraction Layer) interface, implemented by the
- * dmdevfs layer - the opposite direction of the other DMDRVI functions
- * above, which are called by dmdevfs and implemented by the driver. It
- * allows a driver to actively ask dmdevfs for the fully qualified path of
- * one of its own devices (e.g. to log it, or to pass it on to something
- * else that needs to open the device by path).
+ * This is a regular DIF (implemented by the driver, called by dmdevfs) - the
+ * opposite direction of the other DMDRVI functions above, which are called
+ * by dmdevfs and implemented by the driver, but same direction as those:
+ * dmdevfs pushes the path to the driver as soon as it is available, rather
+ * than the driver having to pull/poll for it.
  *
- * dmdevfs only knows the path relative to its own mount root; it resolves
- * the absolute path by asking whoever mounted it (e.g. dmvfs) for the
- * mount's own path and prefixing it.
+ * A device's absolute path cannot be resolved until the dmdevfs mount that
+ * owns it has itself been fully mounted (see dmfsi_mounted() in dmfsi.h) -
+ * which for devices created during the initial config-driven setup happens
+ * well after dmdrvi_create() returns for them. This callback fires once that
+ * precondition is met: either shortly after dmdevfs itself becomes mounted
+ * (for devices already registered by then), or immediately upon
+ * registration (for devices announced via dmdrvi_device_available(), or any
+ * other driver registered with an already-mounted dmdevfs instance).
+ *
+ * Implementing this dif is optional - a driver that doesn't need its own
+ * absolute path can simply not implement it. A driver that does need it
+ * should cache the value passed here, e.g. for use later inside
+ * dmdrvi_ioctl() or dmdrvi_open() - there is no on-demand/pull alternative.
  *
  * @param context DMDRVI context the device belongs to
- * @param dev_num Device number identifying which device within the context to query
- * @param path_buffer Buffer to receive the absolute, null-terminated path
- * @param buffer_size Size of path_buffer
- *
- * @return 0 on success, negative value on failure (e.g. device or context not found, buffer too small)
+ * @param dev_num Device number identifying the device
+ * @param path Absolute, null-terminated path under which the device is now exposed
  */
-dmod_dmdrvi_mal(1.0, int, _get_path, ( dmdrvi_context_t context, const dmdrvi_dev_num_t* dev_num, char* path_buffer, size_t buffer_size ));
+dmod_dmdrvi_dif(1.0, void, _path_ready, ( dmdrvi_context_t context, const dmdrvi_dev_num_t* dev_num, const char* path ));
 
 #endif // DMDRVI_H
