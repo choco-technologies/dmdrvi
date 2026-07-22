@@ -14,6 +14,7 @@ dmdrvi is a driver interface module designed for embedded systems using the DMOD
 - **Standard Operations**: open, close, read, write, ioctl, flush, stat
 - **Configuration Support**: Integration with dmini for device configuration
 - **Dynamic Device Notifications**: Drivers can inform dmdevfs when a device becomes available or unavailable at runtime within an existing context
+- **Network Driver Ioctls**: Built-in ioctl commands for MAC address configuration, link status, and interface start/stop (see `dmdrvi_ioctl.h`)
 - **SAL-Compatible**: Uses only DMOD SAL functions
 - **Lightweight**: Minimal memory footprint suitable for embedded systems
 
@@ -94,6 +95,51 @@ dmdrvi_close(ctx, handle);
 // Free context
 dmdrvi_free(ctx);
 ```
+
+## Network Driver Ioctl Commands
+
+`dmdrvi_ioctl.h` defines a set of ioctl commands intended for network (e.g. Ethernet) drivers implemented on top of dmdrvi. Packet data itself is transferred with the regular `dmdrvi_read`/`dmdrvi_write` calls - these ioctls only cover control operations that don't fit the read/write model:
+
+- `DMDRVI_IOCTL_NET_SET_MAC_ADDR` - set the device MAC address (`const dmdrvi_net_mac_addr_t*` in)
+- `DMDRVI_IOCTL_NET_GET_MAC_ADDR` - read the device MAC address (`dmdrvi_net_mac_addr_t*` out)
+- `DMDRVI_IOCTL_NET_GET_LINK_STATUS` - read the current link state (`dmdrvi_net_link_status_t*` out)
+- `DMDRVI_IOCTL_NET_START` - start the interface (begin packet reception/transmission)
+- `DMDRVI_IOCTL_NET_STOP` - stop the interface
+
+A typical bring-up sequence is: set the MAC address, start the interface, then poll (or wait for) the link status before sending/receiving packets:
+
+```c
+#include "dmdrvi.h"
+#include "dmdrvi_ioctl.h"
+
+void* handle = dmdrvi_open(ctx, DMDRVI_O_RDWR, &dev_num);
+
+// Configure the MAC address before starting the interface
+dmdrvi_net_mac_addr_t mac = { .addr = { 0x02, 0x00, 0x00, 0x00, 0x00, 0x01 } };
+dmdrvi_ioctl(ctx, handle, DMDRVI_IOCTL_NET_SET_MAC_ADDR, &mac);
+
+// Start the interface
+dmdrvi_ioctl(ctx, handle, DMDRVI_IOCTL_NET_START, NULL);
+
+// Check link status
+dmdrvi_net_link_status_t link;
+dmdrvi_ioctl(ctx, handle, DMDRVI_IOCTL_NET_GET_LINK_STATUS, &link);
+if (link == DMDRVI_NET_LINK_UP) {
+    // Send a packet
+    uint8_t frame[64] = { /* ... */ };
+    dmdrvi_write(ctx, handle, frame, sizeof(frame), 0);
+
+    // Receive a packet
+    uint8_t rx_buffer[1518];
+    size_t received = dmdrvi_read(ctx, handle, rx_buffer, sizeof(rx_buffer), 0);
+}
+
+// Stop the interface when done
+dmdrvi_ioctl(ctx, handle, DMDRVI_IOCTL_NET_STOP, NULL);
+dmdrvi_close(ctx, handle);
+```
+
+For guidance on implementing these commands inside a network driver's `dmdrvi_ioctl()` DIF, see [docs/dmdrvi.md](docs/dmdrvi.md#implementing-a-network-driver).
 
 ## Building
 

@@ -167,6 +167,72 @@ typedef struct {
 } dmdrvi_stat_t;
 ```
 
+### Network Driver Ioctl Commands
+
+`dmdrvi_ioctl.h` defines control-plane ioctl commands intended for network
+(e.g. Ethernet) drivers built on top of dmdrvi. Packet payloads are
+transferred through the regular `dmdrvi_read()`/`dmdrvi_write()` calls (one
+call transfers one frame); these ioctls only cover what doesn't fit that
+model: MAC address configuration, link status, and interface start/stop.
+
+| Command                            | `arg` direction | `arg` type                     | Description                    |
+|-------------------------------------|------------------|----------------------------------|---------------------------------|
+| `DMDRVI_IOCTL_NET_SET_MAC_ADDR`     | in               | `const dmdrvi_net_mac_addr_t*`  | Set the device MAC address      |
+| `DMDRVI_IOCTL_NET_GET_MAC_ADDR`     | out              | `dmdrvi_net_mac_addr_t*`        | Read the device MAC address     |
+| `DMDRVI_IOCTL_NET_GET_LINK_STATUS`  | out              | `dmdrvi_net_link_status_t*`     | Read the current link state     |
+| `DMDRVI_IOCTL_NET_START`            | -                | `NULL`                          | Start the interface             |
+| `DMDRVI_IOCTL_NET_STOP`             | -                | `NULL`                          | Stop the interface              |
+
+```c
+#define DMDRVI_NET_MAC_ADDR_LEN 6
+
+typedef struct {
+    uint8_t addr[DMDRVI_NET_MAC_ADDR_LEN];
+} dmdrvi_net_mac_addr_t;
+
+typedef enum {
+    DMDRVI_NET_LINK_DOWN = 0,
+    DMDRVI_NET_LINK_UP   = 1,
+} dmdrvi_net_link_status_t;
+```
+
+The expected bring-up sequence for a network device is:
+
+1. `dmdrvi_open()` the device.
+2. `DMDRVI_IOCTL_NET_SET_MAC_ADDR` to configure the MAC address.
+3. `DMDRVI_IOCTL_NET_START` to enable packet reception/transmission.
+4. `DMDRVI_IOCTL_NET_GET_LINK_STATUS` to check the link before relying on it
+   - dmdrvi has no event/notification mechanism for link changes, so this
+     must be polled.
+5. `dmdrvi_write()` / `dmdrvi_read()` to send/receive frames.
+6. `DMDRVI_IOCTL_NET_STOP` before `dmdrvi_close()`, if the driver needs a
+   clean shutdown of the peripheral.
+
+```c
+#include "dmdrvi.h"
+#include "dmdrvi_ioctl.h"
+
+void* handle = dmdrvi_open(ctx, DMDRVI_O_RDWR, &dev_num);
+
+dmdrvi_net_mac_addr_t mac = { .addr = { 0x02, 0x00, 0x00, 0x00, 0x00, 0x01 } };
+dmdrvi_ioctl(ctx, handle, DMDRVI_IOCTL_NET_SET_MAC_ADDR, &mac);
+dmdrvi_ioctl(ctx, handle, DMDRVI_IOCTL_NET_START, NULL);
+
+dmdrvi_net_link_status_t link;
+dmdrvi_ioctl(ctx, handle, DMDRVI_IOCTL_NET_GET_LINK_STATUS, &link);
+
+if (link == DMDRVI_NET_LINK_UP) {
+    uint8_t frame[64] = { /* ... */ };
+    dmdrvi_write(ctx, handle, frame, sizeof(frame), 0);
+
+    uint8_t rx_buffer[1518];
+    size_t received = dmdrvi_read(ctx, handle, rx_buffer, sizeof(rx_buffer), 0);
+}
+
+dmdrvi_ioctl(ctx, handle, DMDRVI_IOCTL_NET_STOP, NULL);
+dmdrvi_close(ctx, handle);
+```
+
 ## RETURN VALUES
 
 Functions return values as follows:
@@ -432,6 +498,128 @@ bits_per_word=8
 The driver reads the configuration and assigns device numbers based on its 
 internal logic. The filesystem layer then creates device files according to the 
 numbering scheme used by the driver.
+
+## IMPLEMENTING A NETWORK DRIVER
+
+A network driver is a regular dmdrvi driver module: a separate DMOD module
+that implements the DIFs declared in `dmdrvi.h` (`_create`, `_open`,
+`_close`, `_read`, `_write`, `_ioctl`, ...) using
+`dmod_dmdrvi_dif_api_declaration()`, plus the `DMDRVI_IOCTL_NET_*` commands
+from `dmdrvi_ioctl.h` inside its `_ioctl` implementation. It does not
+implement `dmdrvi.c` itself - that file only defines the interface.
+
+### Device numbering
+
+An Ethernet driver typically identifies interfaces by major number only
+(`DMDRVI_NUM_MAJOR`), one major number per MAC peripheral - e.g.
+`/dev/dmeth0`, `/dev/dmeth1`. There's no minor-number concept needed for a
+plain byte-in/byte-out network interface.
+
+### Skeleton
+
+```c
+#define DMOD_ENABLE_REGISTRATION    ON
+#include "dmdrvi.h"
+#include "dmdrvi_ioctl.h"
+
+typedef struct dmdrvi_context {
+    dmdrvi_net_mac_addr_t mac;
+    bool                  running;
+} eth_context_t;
+
+// Assign device numbers and allocate the context
+dmod_dmdrvi_dif_api_declaration(1.0, ETH, dmdrvi_context_t, _create,
+                                 (dmini_context_t config, dmdrvi_dev_num_t* dev_num))
+{
+    eth_context_t* ctx = Dmod_Malloc(sizeof(*ctx));
+    *ctx = (eth_context_t){0};
+
+    dev_num->major = 0;
+    dev_num->flags = DMDRVI_NUM_MAJOR;    // -> /dev/dmeth0
+
+    return (dmdrvi_context_t)ctx;
+}
+
+// Handle the network ioctl commands
+dmod_dmdrvi_dif_api_declaration(1.0, ETH, int, _ioctl,
+                                 (dmdrvi_context_t context, void* handle, int command, void* arg))
+{
+    eth_context_t* ctx = (eth_context_t*)context;
+
+    switch (command) {
+    case DMDRVI_IOCTL_NET_SET_MAC_ADDR:
+        ctx->mac = *(const dmdrvi_net_mac_addr_t*)arg;
+        eth_hw_set_mac_addr(ctx, ctx->mac.addr);
+        return 0;
+
+    case DMDRVI_IOCTL_NET_GET_MAC_ADDR:
+        *(dmdrvi_net_mac_addr_t*)arg = ctx->mac;
+        return 0;
+
+    case DMDRVI_IOCTL_NET_GET_LINK_STATUS:
+        *(dmdrvi_net_link_status_t*)arg =
+            eth_hw_link_is_up(ctx) ? DMDRVI_NET_LINK_UP : DMDRVI_NET_LINK_DOWN;
+        return 0;
+
+    case DMDRVI_IOCTL_NET_START:
+        eth_hw_start(ctx);
+        ctx->running = true;
+        return 0;
+
+    case DMDRVI_IOCTL_NET_STOP:
+        eth_hw_stop(ctx);
+        ctx->running = false;
+        return 0;
+
+    default:
+        return -1;    // unsupported command
+    }
+}
+
+// One dmdrvi_write() call transmits one frame
+dmod_dmdrvi_dif_api_declaration(1.0, ETH, size_t, _write,
+                                 (dmdrvi_context_t context, void* handle,
+                                  const void* buffer, size_t size, uint32_t offset))
+{
+    eth_context_t* ctx = (eth_context_t*)context;
+    if (!ctx->running) return 0;
+    return eth_hw_transmit(ctx, buffer, size);
+}
+
+// One dmdrvi_read() call receives one frame
+dmod_dmdrvi_dif_api_declaration(1.0, ETH, size_t, _read,
+                                 (dmdrvi_context_t context, void* handle,
+                                  void* buffer, size_t size, uint32_t offset))
+{
+    eth_context_t* ctx = (eth_context_t*)context;
+    if (!ctx->running) return 0;
+    return eth_hw_receive(ctx, buffer, size);
+}
+```
+
+`eth_hw_*` above stand for the peripheral-specific driver code (register
+access, DMA, interrupts, ...) - dmdrvi only defines the interface shape, not
+the hardware access itself.
+
+### Design notes
+
+- `_write()`/`_read()` map naturally to "transmit one frame" / "receive one
+  frame". There is no packet-chain object to assemble as in some RTOS
+  Ethernet drivers - dmdrvi already works with flat buffers, so a single
+  `dmdrvi_write()`/`dmdrvi_read()` call is one frame.
+- If the MAC hardware requires the address to be programmed before the
+  peripheral starts, either reject `DMDRVI_IOCTL_NET_START` when no MAC
+  address has been set yet, or apply the cached address as part of handling
+  `DMDRVI_IOCTL_NET_START` - matching the bring-up sequence recommended above
+  (`SET_MAC_ADDR` then `START`).
+- Link-state changes are only observable by polling
+  `DMDRVI_IOCTL_NET_GET_LINK_STATUS` - dmdrvi has no built-in event or
+  notification mechanism for it. A driver that needs to push link-change
+  events to upper layers has to do so through its own mechanism, outside of
+  the dmdrvi interface.
+- `_read()`/`_write()` returning `0` is used above for "interface not
+  running"; drivers should otherwise follow the same return-value contract
+  as any other dmdrvi driver (see RETURN VALUES).
 
 ## SEE ALSO
 
