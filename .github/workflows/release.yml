@@ -84,6 +84,8 @@ jobs:
           ls -la dmfc/
       
       - name: Prepare release package
+        env:
+          RELEASE_BODY: ${{ github.event.release.body }}
         run: |
           set -e
           mkdir -p release_package
@@ -115,7 +117,7 @@ jobs:
           cp LICENSE release_package/
           
           # Create release notes file from GitHub release
-          echo "${{ github.event.release.body }}" > release_package/RELEASE_NOTES.txt
+          printf '%s\n' "$RELEASE_BODY" > release_package/RELEASE_NOTES.txt
           
           echo "Package contents:"
           ls -la release_package/
