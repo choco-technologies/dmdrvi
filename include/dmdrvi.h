@@ -5,6 +5,11 @@
 #include "dmod.h"
 #include "dmdrvi_defs.h"
 #include "dmini.h"
+#include "dmdrvi_ioctl.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /**
  * @brief Opaque context type for DMDRVI module
@@ -238,5 +243,9 @@ dmod_dmdrvi_mal(1.0, void, _device_unavailable, ( dmdrvi_context_t context, cons
  * @param path Absolute, null-terminated path under which the device is now exposed
  */
 dmod_dmdrvi_dif(1.0, void, _path_ready, ( dmdrvi_context_t context, const dmdrvi_dev_num_t* dev_num, const char* path ));
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // DMDRVI_H
