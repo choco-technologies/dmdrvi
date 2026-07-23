@@ -64,6 +64,19 @@ typedef enum
  */
 #define DMDRVI_IOCTL_NET_STOP                0x05
 
+/**
+ * @brief Start of the reserved range for driver-specific custom ioctl commands
+ *
+ * A driver built on dmdrvi (e.g. a network driver needing something beyond
+ * DMDRVI_IOCTL_NET_*) should number its own private commands starting from
+ * this base, not from "last standard command + 1" - the standard command
+ * set above is expected to grow over time, and a driver numbering its own
+ * commands relative to whichever one happens to be last today would silently
+ * collide with a new standard command added later. Leaves generous headroom
+ * (4095 possible standard commands per category) before reaching this base.
+ */
+#define DMDRVI_IOCTL_CUSTOM_BASE              0x1000
+
 #ifdef __cplusplus
 }
 #endif
