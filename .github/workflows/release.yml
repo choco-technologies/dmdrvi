@@ -105,9 +105,11 @@ jobs:
           # Copy .dmr resource files
           cp dmdrvi.dmr release_package/
           
-          # Copy header files
+          # Copy header files - the whole include/ directory, not individual
+          # names, so a new header (e.g. dmdrvi_ioctl.h) is never silently
+          # left out of the release package again.
           mkdir -p release_package/include
-          cp include/dmdrvi.h release_package/include/
+          cp include/*.h release_package/include/
           cp $BUILD_DIR/dmdrvi_defs.h release_package/include/
           
           # Copy documentation
