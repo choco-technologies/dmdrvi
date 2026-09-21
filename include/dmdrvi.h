@@ -70,6 +70,33 @@ typedef struct
 } dmdrvi_stat_t;
 
 /**
+ * @brief State of the device
+ */
+typedef enum 
+{
+    dmdrvi_dev_state_unknown = 0,       //!< Unknown state
+    dmdrvi_dev_state_ready,             //!< Ready to be used 
+    dmdrvi_dev_state_sleeping,          //!< The driver is sleeping
+    dmdrvi_dev_state_dead,              //!< The driver is dead
+    dmdrvi_dev_state_count              //!< Helper for state count
+} dmdrvi_dev_state_t;
+
+/**
+ * @brief Information about a friend
+ * 
+ * Structure with information about a friend's node
+ */
+typedef struct
+{
+    const char*             alt_name;       //!< Alternative name 
+    dmdrvi_context_t        context;        //!< Context of the driver 
+    Dmod_Context_t*         driver;         //!< Driver's module context
+    const char*             node_path;      //!< Full path to the node
+    dmdrvi_dev_state_t      state;          //!< State of the device
+    const dmdrvi_dev_num_t* dev_num;        //!< Device Number information  
+} dmdrvi_friend_info_t;
+
+/**
  * @brief Create a DMDRVI context
  *
  * The driver will assign device numbers based on the configuration and return them
@@ -243,6 +270,23 @@ dmod_dmdrvi_mal(1.0, void, _device_unavailable, ( dmdrvi_context_t context, cons
  * @param path Absolute, null-terminated path under which the device is now exposed
  */
 dmod_dmdrvi_dif(1.0, void, _path_ready, ( dmdrvi_context_t context, const dmdrvi_dev_num_t* dev_num, const char* path ));
+
+/**
+ * @brief Notifies a driver when one of the friend's state changed
+ * 
+ * The configuration files can be joined into friend groups. When you would specify 
+ * a group in the ini file (for example `friend_group=my_spi`), all the related drivers are notified 
+ * about a node configuration. This is useful, when one driver requires context of another one. For example
+ * when SPI driver uses GPIO, it can define the configuration for the pins and use the same friend group name 
+ * as in the spi configuration, then the SPI will know what is the context for CS pins.
+ * 
+ * Implementation of this API is optional
+ * 
+ * @param context           context the device belongs to
+ * @param group_name        friends group name
+ * @param info              structure with informations about the friend
+ */
+dmod_dmdrvi_dif(1.0, void, _friend_changed, ( dmdrvi_context_t context, const char* group_name, const dmdrvi_friend_info_t* info ));
 
 #ifdef __cplusplus
 }
