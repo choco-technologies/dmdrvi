@@ -89,8 +89,8 @@ typedef enum
 typedef struct
 {
     const char*             alt_name;       //!< Alternative name 
-    dmdrvi_context_t        context;        //!< Context of the driver 
-    Dmod_Context_t*         driver;         //!< Driver's module context
+    const char*             group_name;     //!< Name of the friend's group
+    const char*             friend_role;    //!< Role of the friend
     const char*             node_path;      //!< Full path to the node
     dmdrvi_dev_state_t      state;          //!< State of the device
     const dmdrvi_dev_num_t* dev_num;        //!< Device Number information  
@@ -283,10 +283,9 @@ dmod_dmdrvi_dif(1.0, void, _path_ready, ( dmdrvi_context_t context, const dmdrvi
  * Implementation of this API is optional
  * 
  * @param context           context the device belongs to
- * @param group_name        friends group name
  * @param info              structure with informations about the friend
  */
-dmod_dmdrvi_dif(1.0, void, _friend_changed, ( dmdrvi_context_t context, const char* group_name, const dmdrvi_friend_info_t* info ));
+dmod_dmdrvi_dif(1.0, void, _friend_changed, ( dmdrvi_context_t context, const dmdrvi_friend_info_t* info ));
 
 #ifdef __cplusplus
 }
