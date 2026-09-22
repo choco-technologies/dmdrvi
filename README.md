@@ -13,6 +13,7 @@ dmdrvi is a driver interface module designed for embedded systems using the DMOD
 - **Flexible Access Modes**: Read-only, write-only, and read-write support
 - **Standard Operations**: open, close, read, write, ioctl, flush, stat
 - **Configuration Support**: Integration with dmini for device configuration
+- **Friends Groups**: Group related driver configurations and let drivers discover one another's device paths
 - **Dynamic Device Notifications**: Drivers can inform dmdevfs when a device becomes available or unavailable at runtime within an existing context
 - **Network Driver Ioctls**: Built-in ioctl commands for MAC address configuration, link status, and interface start/stop (see `dmdrvi_ioctl.h`)
 - **SAL-Compatible**: Uses only DMOD SAL functions
@@ -36,6 +37,10 @@ dmdrvi is a driver interface module designed for embedded systems using the DMOD
 ### Dynamic Device Notifications (MAL interface, driver -> dmdevfs)
 - `dmdrvi_device_available(context, dev_num)` - Driver informs dmdevfs that a new device is available within an existing context
 - `dmdrvi_device_unavailable(context, dev_num)` - Driver informs dmdevfs that a device is no longer available
+
+### Friends Groups
+
+- `dmdrvi_friend_changed(context, info)` - Notify a driver about a device belonging to the same friends group (optional driver callback)
 
 ### Open Flags
 - `DMDRVI_O_RDONLY` - Open for read only
@@ -178,6 +183,100 @@ dmdrvi_context_t driver = dmdrvi_create(config, &dev_num);
 dmdrvi_free(driver);
 dmini_destroy(config);
 ```
+
+## Friends Groups
+
+Friends groups connect device configurations that together implement one logical peripheral. This is useful when one driver depends on devices exposed by other drivers. For example, an SPI controller can use GPIO devices for its SCK, MISO, MOSI, and software-controlled chip-select pins.
+
+Add the same `friends_group` value to every related INI section. `dmdevfs` then calls the optional `dmdrvi_friend_changed()` callback when information about a member of that group changes. The callback receives a `dmdrvi_friend_info_t` containing:
+
+- `group_name` - the value of `friends_group`
+- `friend_role` - an optional application-defined role from the member's `friend_role` setting
+- `alt_name` - the member's alternative device name, when present
+- `node_path` - the full path of the device node; a dependent driver can save this path and open the device when needed
+- `state` - the current device state (`unknown`, `ready`, `sleeping`, or `dead`)
+- `dev_num` - the member's device-number information
+
+`friend_role` is useful when a group contains several devices of the same type. Instead of depending on a section name or a generated path, the consuming driver can find a member by its logical role, such as `chip_select`.
+
+The following configuration groups an SPI2 controller and its GPIO pins under `arduino_spi`. The SPI driver can identify the CS GPIO by its `chip_select` role and obtain its path (on this board, `/dev/dmgpio8/arduino_spi_cs`) from `info->node_path`:
+
+```ini
+; STM32F746G-DISCO SPI2 on the Arduino Uno V3 connector:
+; D13/SCK=PI1, D12/MISO=PB14, D11/MOSI=PB15, D10/CS=PI0.
+
+[arduino_spi_sck]
+driver_name=dmgpio
+friends_group=arduino_spi
+pin=PI1
+mode=alternate
+alternate_function=5
+speed=maximum
+output_circuit=push_pull
+pull=none
+
+[arduino_spi_miso]
+driver_name=dmgpio
+friends_group=arduino_spi
+pin=PB14
+mode=alternate
+alternate_function=5
+pull=none
+
+[arduino_spi_mosi]
+driver_name=dmgpio
+friends_group=arduino_spi
+pin=PB15
+mode=alternate
+alternate_function=5
+speed=maximum
+output_circuit=push_pull
+pull=none
+
+[arduino_spi_cs]
+driver_name=dmgpio
+friends_group=arduino_spi
+friend_role=chip_select
+pin=PI0
+mode=output
+pull=up
+speed=maximum
+output_circuit=push_pull
+
+[arduino_spi]
+driver_name=dmspi
+friends_group=arduino_spi
+instance=2
+role=master
+baudrate=1000000
+mode=0
+bit_order=msb_first
+nss_mode=soft
+cs_active_level=low
+```
+
+A driver that consumes a friend can implement the callback as follows:
+
+```c
+void dmdrvi_friend_changed(dmdrvi_context_t context,
+                           const dmdrvi_friend_info_t* info)
+{
+    struct dmspi_context* spi = (struct dmspi_context*)context;
+
+    if (info->group_name != NULL &&
+        info->friend_role != NULL &&
+        strcmp(info->friend_role, "chip_select") == 0) {
+        if (info->state == dmdrvi_dev_state_ready && info->node_path != NULL) {
+            /* Copy node_path into storage owned by the driver. */
+            save_cs_path(spi, info->node_path);
+        } else {
+            clear_cs_path(spi);
+        }
+    }
+}
+```
+
+The callback is optional. Drivers that do not need to discover or track other members of their group do not have to implement it.
 
 ## Device Number System
 
