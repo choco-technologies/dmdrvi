@@ -5,6 +5,7 @@
 #include "dmod.h"
 #include "dmdrvi_defs.h"
 #include "dmini.h"
+#include "dmdrvi_types.h"
 #include "dmdrvi_ioctl.h"
 
 #ifdef __cplusplus
@@ -65,7 +66,7 @@ typedef struct
  */
 typedef struct 
 {
-    uint32_t size;       //!< Size of the file
+    dmdrvi_size_t size;  //!< Size of the device or file in bytes
     uint32_t mode;       //!< File mode (permissions)
 } dmdrvi_stat_t;
 
@@ -108,14 +109,14 @@ typedef struct
  * 
  * @return dmdrvi_context_t Created DMDRVI context
  */
-dmod_dmdrvi_dif(1.0, dmdrvi_context_t, _create, ( dmini_context_t config, dmdrvi_dev_num_t* dev_num ));
+dmod_dmdrvi_dif(2.0, dmdrvi_context_t, _create, ( dmini_context_t config, dmdrvi_dev_num_t* dev_num ));
 
 /**
  * @brief Free a DMDRVI context
  *
  * @param context DMDRVI context to free
  */
-dmod_dmdrvi_dif(1.0, void, _free, ( dmdrvi_context_t context ));
+dmod_dmdrvi_dif(2.0, void, _free, ( dmdrvi_context_t context ));
 
 /**
  * @brief Open a device
@@ -130,7 +131,7 @@ dmod_dmdrvi_dif(1.0, void, _free, ( dmdrvi_context_t context ));
  *
  * @return void* Device handle
  */
-dmod_dmdrvi_dif(1.0, void*, _open, ( dmdrvi_context_t context, int flags, const dmdrvi_dev_num_t* dev_num ));
+dmod_dmdrvi_dif(2.0, void*, _open, ( dmdrvi_context_t context, int flags, const dmdrvi_dev_num_t* dev_num ));
 
 /**
  * @brief Close a device
@@ -138,7 +139,7 @@ dmod_dmdrvi_dif(1.0, void*, _open, ( dmdrvi_context_t context, int flags, const 
  * @param context DMDRVI context
  * @param handle Device handle
  */
-dmod_dmdrvi_dif(1.0, void, _close, ( dmdrvi_context_t context, void* handle ));
+dmod_dmdrvi_dif(2.0, void, _close, ( dmdrvi_context_t context, void* handle ));
 
 /**
  * @brief Read from a device
@@ -146,12 +147,14 @@ dmod_dmdrvi_dif(1.0, void, _close, ( dmdrvi_context_t context, void* handle ));
  * @param context DMDRVI context
  * @param handle Device handle
  * @param buffer Buffer to read data into
- * @param size Number of bytes to read
- * @param offset Byte offset from the beginning of the device to read from
+ * @param size Number of bytes to read; values greater than INT64_MAX must fail
+ * with -EOVERFLOW because they cannot be represented by dmdrvi_ssize_t
+ * @param offset Non-negative byte offset from the beginning of the device
  * 
- * @return size_t Number of bytes read
+ * @return Number of bytes read, zero at end of device, or a negative
+ * errno-compatible error. A zero-length request returns zero.
  */
-dmod_dmdrvi_dif(1.0, size_t, _read, ( dmdrvi_context_t context, void* handle, void* buffer, size_t size, uint32_t offset ));
+dmod_dmdrvi_dif(2.0, dmdrvi_ssize_t, _read, ( dmdrvi_context_t context, void* handle, void* buffer, size_t size, dmdrvi_offset_t offset ));
 
 /**
  * @brief Write to a device
@@ -159,12 +162,14 @@ dmod_dmdrvi_dif(1.0, size_t, _read, ( dmdrvi_context_t context, void* handle, vo
  * @param context DMDRVI context
  * @param handle Device handle
  * @param buffer Buffer with data to write
- * @param size Number of bytes to write
- * @param offset Byte offset from the beginning of the device to write to
+ * @param size Number of bytes to write; values greater than INT64_MAX must fail
+ * with -EOVERFLOW because they cannot be represented by dmdrvi_ssize_t
+ * @param offset Non-negative byte offset from the beginning of the device
  * 
- * @return size_t Number of bytes written
+ * @return Number of bytes written or a negative errno-compatible error. A
+ * zero-length request returns zero.
  */
-dmod_dmdrvi_dif(1.0, size_t, _write, ( dmdrvi_context_t context, void* handle, const void* buffer, size_t size, uint32_t offset ));
+dmod_dmdrvi_dif(2.0, dmdrvi_ssize_t, _write, ( dmdrvi_context_t context, void* handle, const void* buffer, size_t size, dmdrvi_offset_t offset ));
 
 /**
  * @brief Ioctl operation on a device
@@ -176,7 +181,7 @@ dmod_dmdrvi_dif(1.0, size_t, _write, ( dmdrvi_context_t context, void* handle, c
  * 
  * @return int Result of the ioctl operation (errno)
  */
-dmod_dmdrvi_dif(1.0, int, _ioctl, ( dmdrvi_context_t context, void* handle, int command, void* arg ));
+dmod_dmdrvi_dif(2.0, int, _ioctl, ( dmdrvi_context_t context, void* handle, int command, void* arg ));
 
 /**
  * @brief Flush device buffers
@@ -186,7 +191,7 @@ dmod_dmdrvi_dif(1.0, int, _ioctl, ( dmdrvi_context_t context, void* handle, int 
  * 
  * @return int Result of the flush operation (errno)
  */
-dmod_dmdrvi_dif(1.0, int, _flush, ( dmdrvi_context_t context, void* handle ));
+dmod_dmdrvi_dif(2.0, int, _flush, ( dmdrvi_context_t context, void* handle ));
 
 /**
  * @brief Get device status
@@ -201,7 +206,7 @@ dmod_dmdrvi_dif(1.0, int, _flush, ( dmdrvi_context_t context, void* handle ));
  * 
  * @return int Result of the stat operation (errno)
  */
-dmod_dmdrvi_dif(1.0, int, _stat, ( dmdrvi_context_t context, const char* path, dmdrvi_stat_t* stat ));
+dmod_dmdrvi_dif(2.0, int, _stat, ( dmdrvi_context_t context, const char* path, dmdrvi_stat_t* stat ));
 
 /**
  * @brief Notify that a new device is available within a driver context
@@ -269,7 +274,7 @@ dmod_dmdrvi_mal(1.0, void, _device_unavailable, ( dmdrvi_context_t context, cons
  * @param dev_num Device number identifying the device
  * @param path Absolute, null-terminated path under which the device is now exposed
  */
-dmod_dmdrvi_dif(1.0, void, _path_ready, ( dmdrvi_context_t context, const dmdrvi_dev_num_t* dev_num, const char* path ));
+dmod_dmdrvi_dif(2.0, void, _path_ready, ( dmdrvi_context_t context, const dmdrvi_dev_num_t* dev_num, const char* path ));
 
 /**
  * @brief Notifies a driver when one of the friend's state changed
@@ -285,7 +290,7 @@ dmod_dmdrvi_dif(1.0, void, _path_ready, ( dmdrvi_context_t context, const dmdrvi
  * @param context           context the device belongs to
  * @param info              structure with informations about the friend
  */
-dmod_dmdrvi_dif(1.0, void, _friend_changed, ( dmdrvi_context_t context, const dmdrvi_friend_info_t* info ));
+dmod_dmdrvi_dif(2.0, void, _friend_changed, ( dmdrvi_context_t context, const dmdrvi_friend_info_t* info ));
 
 #ifdef __cplusplus
 }

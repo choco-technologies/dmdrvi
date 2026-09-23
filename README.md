@@ -12,6 +12,8 @@ dmdrvi is a driver interface module designed for embedded systems using the DMOD
 - **Device Identification**: Major/minor device number system
 - **Flexible Access Modes**: Read-only, write-only, and read-write support
 - **Standard Operations**: open, close, read, write, ioctl, flush, stat
+- **64-bit Addressing**: Explicit offset, size, and signed I/O-result types for devices larger than 4 GiB
+- **Block Device Controls**: Standard geometry, erase, and discard ioctls
 - **Configuration Support**: Integration with dmini for device configuration
 - **Friends Groups**: Group related driver configurations and let drivers discover one another's device paths
 - **Dynamic Device Notifications**: Drivers can inform dmdevfs when a device becomes available or unavailable at runtime within an existing context
@@ -28,8 +30,8 @@ dmdrvi is a driver interface module designed for embedded systems using the DMOD
 ### Device Operations
 - `dmdrvi_open(context, flags, dev_num)` - Open device with specified flags
 - `dmdrvi_close(context, handle)` - Close device handle
-- `dmdrvi_read(context, handle, buffer, size)` - Read data from device
-- `dmdrvi_write(context, handle, buffer, size)` - Write data to device
+- `dmdrvi_read(context, handle, buffer, size, offset)` - Read at a 64-bit byte offset; returns bytes, EOF, or a negative error
+- `dmdrvi_write(context, handle, buffer, size, offset)` - Write at a 64-bit byte offset; returns bytes or a negative error
 - `dmdrvi_ioctl(context, handle, command, arg)` - Device control operations
 - `dmdrvi_flush(context, handle)` - Flush device buffers
 - `dmdrvi_stat(context, path, stat)` - Get device status
@@ -80,16 +82,16 @@ void* handle = dmdrvi_open(ctx, DMDRVI_O_RDWR, &dev_num);
 
 // Write data to device
 char write_buffer[] = "Hello Device";
-size_t written = dmdrvi_write(ctx, handle, write_buffer, sizeof(write_buffer));
+dmdrvi_ssize_t written = dmdrvi_write(ctx, handle, write_buffer, sizeof(write_buffer), 0);
 
 // Read data from device
 char read_buffer[256];
-size_t read = dmdrvi_read(ctx, handle, read_buffer, sizeof(read_buffer));
+dmdrvi_ssize_t read = dmdrvi_read(ctx, handle, read_buffer, sizeof(read_buffer), 0);
 
 // Get device status (does not require opening the device)
 dmdrvi_stat_t stat;
 int result = dmdrvi_stat(ctx, "/dev/dmuart0", &stat);
-Dmod_Printf("Device size: %u bytes\n", stat.size);
+Dmod_Printf("Device size: %llu bytes\n", (unsigned long long)stat.size);
 
 // Flush buffers
 dmdrvi_flush(ctx, handle);
@@ -136,7 +138,7 @@ if (link == DMDRVI_NET_LINK_UP) {
 
     // Receive a packet
     uint8_t rx_buffer[1518];
-    size_t received = dmdrvi_read(ctx, handle, rx_buffer, sizeof(rx_buffer), 0);
+    dmdrvi_ssize_t received = dmdrvi_read(ctx, handle, rx_buffer, sizeof(rx_buffer), 0);
 }
 
 // Stop the interface when done
@@ -145,6 +147,14 @@ dmdrvi_close(ctx, handle);
 ```
 
 For guidance on implementing these commands inside a network driver's `dmdrvi_ioctl()` DIF, see [docs/dmdrvi.md](docs/dmdrvi.md#implementing-a-network-driver).
+
+## Block Driver Ioctl Commands
+
+- `DMDRVI_IOCTL_BLOCK_GET_INFO` returns `dmdrvi_block_info_t` geometry and capability flags.
+- `DMDRVI_IOCTL_BLOCK_ERASE` performs a physical erase over a `dmdrvi_block_range_t`.
+- `DMDRVI_IOCTL_BLOCK_DISCARD` marks a `dmdrvi_block_range_t` unused without promising its read-back contents.
+
+All block ranges use 64-bit byte offsets and lengths. See the API reference for alignment and capability rules.
 
 ## Building
 
