@@ -82,12 +82,8 @@ dmod_add_library(${DMOD_MODULE_NAME} ${DMOD_MODULE_VERSION}
     src/dmdrvi.c
 )
 
-dmod_link_modules(${DMOD_MODULE_NAME} PUBLIC
+dmod_link_modules(${DMOD_MODULE_NAME}
     dmini
-)
-
-target_include_directories(${DMOD_MODULE_NAME} PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
 target_include_directories(${DMOD_MODULE_NAME}_if INTERFACE
