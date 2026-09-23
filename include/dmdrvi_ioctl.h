@@ -2,6 +2,7 @@
 #define DMDRVI_IOCTL_H
 
 #include <stdint.h>
+#include "dmdrvi_types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -63,6 +64,58 @@ typedef enum
  * arg: none
  */
 #define DMDRVI_IOCTL_NET_STOP                0x05
+
+/** Block device is read-only. */
+#define DMDRVI_BLOCK_FLAG_READ_ONLY          (1u << 0)
+
+/** Block device can be removed while the system is running. */
+#define DMDRVI_BLOCK_FLAG_REMOVABLE          (1u << 1)
+
+/** Block device implements DMDRVI_IOCTL_BLOCK_ERASE. */
+#define DMDRVI_BLOCK_FLAG_ERASE_SUPPORTED    (1u << 2)
+
+/** Block device implements DMDRVI_IOCTL_BLOCK_DISCARD. */
+#define DMDRVI_BLOCK_FLAG_DISCARD_SUPPORTED  (1u << 3)
+
+/** Standard geometry and capabilities returned by a block device. */
+typedef struct
+{
+    uint32_t logical_block_size;  /**< Addressable block size in bytes. */
+    uint32_t erase_block_size;    /**< Minimum erase unit in bytes, or zero. */
+    dmdrvi_size_t block_count;    /**< Number of logical blocks. */
+    uint32_t flags;               /**< DMDRVI_BLOCK_FLAG_* capability bits. */
+} dmdrvi_block_info_t;
+
+/** Byte range used by erase and discard controls. */
+typedef struct
+{
+    dmdrvi_offset_t offset;  /**< Non-negative byte offset. */
+    dmdrvi_size_t length;    /**< Range length in bytes. */
+} dmdrvi_block_range_t;
+
+/**
+ * Read block geometry and capabilities.
+ *
+ * arg: dmdrvi_block_info_t* - output buffer
+ */
+#define DMDRVI_IOCTL_BLOCK_GET_INFO          0x100
+
+/**
+ * Physically erase an aligned byte range. Successful completion means the
+ * operation has completed on the medium. The post-erase byte value is
+ * device-specific.
+ *
+ * arg: const dmdrvi_block_range_t* - input range
+ */
+#define DMDRVI_IOCTL_BLOCK_ERASE             0x101
+
+/**
+ * Inform the device that an aligned byte range is no longer in use. Reads of
+ * discarded data are unspecified until it is written again.
+ *
+ * arg: const dmdrvi_block_range_t* - input range
+ */
+#define DMDRVI_IOCTL_BLOCK_DISCARD           0x102
 
 /**
  * @brief Start of the reserved range for driver-specific custom ioctl commands

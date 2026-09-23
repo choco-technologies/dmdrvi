@@ -15,10 +15,10 @@ void dmdrvi_free(dmdrvi_context_t context);
 void* dmdrvi_open(dmdrvi_context_t context, int flags, const dmdrvi_dev_num_t* dev_num);
 void dmdrvi_close(dmdrvi_context_t context, void* handle);
 
-size_t dmdrvi_read(dmdrvi_context_t context, void* handle, 
-                   void* buffer, size_t size, uint32_t offset);
-size_t dmdrvi_write(dmdrvi_context_t context, void* handle, 
-                    const void* buffer, size_t size, uint32_t offset);
+dmdrvi_ssize_t dmdrvi_read(dmdrvi_context_t context, void* handle,
+                           void* buffer, size_t size, dmdrvi_offset_t offset);
+dmdrvi_ssize_t dmdrvi_write(dmdrvi_context_t context, void* handle,
+                            const void* buffer, size_t size, dmdrvi_offset_t offset);
 
 int dmdrvi_ioctl(dmdrvi_context_t context, void* handle, 
                  int command, void* arg);
@@ -99,12 +99,13 @@ handle or NULL on error.
 associated resources.
 
 **dmdrvi_read()** reads up to *size* bytes from the device into *buffer*, starting
-at the byte position specified by *offset*. Returns the number of bytes actually
-read, or 0 on error.
+at the non-negative byte position specified by *offset*. It returns the number of
+bytes actually read, zero only for EOF or a zero-length request, and a negative
+errno-compatible value on failure.
 
 **dmdrvi_write()** writes up to *size* bytes from *buffer* to the device at the
-byte position specified by *offset*. Returns the number of bytes actually written,
-or a negative value on error.
+byte position specified by *offset*. It returns the number of bytes actually
+written or a negative errno-compatible value on failure.
 
 **dmdrvi_ioctl()** performs device-specific control operations. The *command* 
 parameter specifies the operation, and *arg* provides operation-specific data. 
@@ -162,10 +163,35 @@ void dmdrvi_device_unavailable(dmdrvi_context_t context, const dmdrvi_dev_num_t*
 
 ```c
 typedef struct {
-    uint32_t size;  //!< Size of the device/file
-    uint32_t mode;  //!< Device mode (permissions)
+    dmdrvi_size_t size;  //!< 64-bit size of the device/file
+    uint32_t mode;       //!< Device mode (permissions)
 } dmdrvi_stat_t;
 ```
+
+`dmdrvi_offset_t`, `dmdrvi_size_t`, and `dmdrvi_ssize_t` are explicit 64-bit
+types declared in `dmdrvi_types.h`. The signed I/O result makes EOF (`0`)
+unambiguous from an error (`< 0`). A request whose byte count cannot be
+represented by `dmdrvi_ssize_t` must fail with `-EOVERFLOW`.
+
+### Block Device Ioctl Commands
+
+Block drivers expose their geometry through
+`DMDRVI_IOCTL_BLOCK_GET_INFO`. `logical_block_size` and
+`erase_block_size` are byte counts, while `block_count` is the number of
+logical blocks. The total capacity is therefore
+`logical_block_size * block_count`, checked for overflow by the caller.
+
+| Command | `arg` type | Meaning |
+|---------|------------|---------|
+| `DMDRVI_IOCTL_BLOCK_GET_INFO` | `dmdrvi_block_info_t*` | Return geometry and capability flags |
+| `DMDRVI_IOCTL_BLOCK_ERASE` | `const dmdrvi_block_range_t*` | Physically erase an aligned byte range |
+| `DMDRVI_IOCTL_BLOCK_DISCARD` | `const dmdrvi_block_range_t*` | Mark an aligned byte range unused; subsequent contents are unspecified |
+
+Erase and discard are separate operations. A driver advertises support with
+`DMDRVI_BLOCK_FLAG_ERASE_SUPPORTED` and
+`DMDRVI_BLOCK_FLAG_DISCARD_SUPPORTED`; unsupported controls return an
+errno-compatible error. Ranges use 64-bit byte offsets and lengths and must be
+aligned to the device's reported requirements.
 
 ### Network Driver Ioctl Commands
 
@@ -226,7 +252,7 @@ if (link == DMDRVI_NET_LINK_UP) {
     dmdrvi_write(ctx, handle, frame, sizeof(frame), 0);
 
     uint8_t rx_buffer[1518];
-    size_t received = dmdrvi_read(ctx, handle, rx_buffer, sizeof(rx_buffer), 0);
+    dmdrvi_ssize_t received = dmdrvi_read(ctx, handle, rx_buffer, sizeof(rx_buffer), 0);
 }
 
 dmdrvi_ioctl(ctx, handle, DMDRVI_IOCTL_NET_STOP, NULL);
@@ -239,7 +265,7 @@ Functions return values as follows:
 
 * **dmdrvi_create()** - Context pointer on success, NULL on error
 * **dmdrvi_open()** - Device handle on success, NULL on error
-* **dmdrvi_read()/write()** - Number of bytes transferred, or 0/negative on error
+* **dmdrvi_read()/write()** - Non-negative byte count, or a negative errno-compatible error; `0` from read means EOF
 * **dmdrvi_ioctl()/flush()/stat()** - 0 on success, errno-compatible error code otherwise
 
 ## EXAMPLES
@@ -274,11 +300,11 @@ void* handle = dmdrvi_open(ctx, DMDRVI_O_RDWR, &dev_num);
 
 // Write data
 const char* msg = "Hello Device!\n";
-size_t written = dmdrvi_write(ctx, handle, msg, strlen(msg), 0);
+dmdrvi_ssize_t written = dmdrvi_write(ctx, handle, msg, strlen(msg), 0);
 
 // Read response
 char buffer[256];
-size_t read = dmdrvi_read(ctx, handle, buffer, sizeof(buffer), 0);
+dmdrvi_ssize_t read = dmdrvi_read(ctx, handle, buffer, sizeof(buffer), 0);
 
 // Close and cleanup
 dmdrvi_close(ctx, handle);
@@ -320,7 +346,7 @@ dmdrvi_stat_t stat;
 int result = dmdrvi_stat(ctx, "/dev/dmuart0", &stat);
 
 if (result == 0) {
-    Dmod_Printf("Device size: %u bytes\n", stat.size);
+    Dmod_Printf("Device size: %llu bytes\n", (unsigned long long)stat.size);
     Dmod_Printf("Device mode: 0x%08X\n", stat.mode);
 }
 ```
@@ -521,6 +547,7 @@ plain byte-in/byte-out network interface.
 #define DMOD_ENABLE_REGISTRATION    ON
 #include "dmdrvi.h"
 #include "dmdrvi_ioctl.h"
+#include <errno.h>
 
 typedef struct dmdrvi_context {
     dmdrvi_net_mac_addr_t mac;
@@ -528,7 +555,7 @@ typedef struct dmdrvi_context {
 } eth_context_t;
 
 // Assign device numbers and allocate the context
-dmod_dmdrvi_dif_api_declaration(1.0, ETH, dmdrvi_context_t, _create,
+dmod_dmdrvi_dif_api_declaration(2.0, ETH, dmdrvi_context_t, _create,
                                  (dmini_context_t config, dmdrvi_dev_num_t* dev_num))
 {
     eth_context_t* ctx = Dmod_Malloc(sizeof(*ctx));
@@ -541,7 +568,7 @@ dmod_dmdrvi_dif_api_declaration(1.0, ETH, dmdrvi_context_t, _create,
 }
 
 // Handle the network ioctl commands
-dmod_dmdrvi_dif_api_declaration(1.0, ETH, int, _ioctl,
+dmod_dmdrvi_dif_api_declaration(2.0, ETH, int, _ioctl,
                                  (dmdrvi_context_t context, void* handle, int command, void* arg))
 {
     eth_context_t* ctx = (eth_context_t*)context;
@@ -577,22 +604,22 @@ dmod_dmdrvi_dif_api_declaration(1.0, ETH, int, _ioctl,
 }
 
 // One dmdrvi_write() call transmits one frame
-dmod_dmdrvi_dif_api_declaration(1.0, ETH, size_t, _write,
+dmod_dmdrvi_dif_api_declaration(2.0, ETH, dmdrvi_ssize_t, _write,
                                  (dmdrvi_context_t context, void* handle,
-                                  const void* buffer, size_t size, uint32_t offset))
+                                  const void* buffer, size_t size, dmdrvi_offset_t offset))
 {
     eth_context_t* ctx = (eth_context_t*)context;
-    if (!ctx->running) return 0;
+    if (!ctx->running) return -EIO;
     return eth_hw_transmit(ctx, buffer, size);
 }
 
 // One dmdrvi_read() call receives one frame
-dmod_dmdrvi_dif_api_declaration(1.0, ETH, size_t, _read,
+dmod_dmdrvi_dif_api_declaration(2.0, ETH, dmdrvi_ssize_t, _read,
                                  (dmdrvi_context_t context, void* handle,
-                                  void* buffer, size_t size, uint32_t offset))
+                                  void* buffer, size_t size, dmdrvi_offset_t offset))
 {
     eth_context_t* ctx = (eth_context_t*)context;
-    if (!ctx->running) return 0;
+    if (!ctx->running) return -EIO;
     return eth_hw_receive(ctx, buffer, size);
 }
 ```
@@ -617,9 +644,18 @@ the hardware access itself.
   notification mechanism for it. A driver that needs to push link-change
   events to upper layers has to do so through its own mechanism, outside of
   the dmdrvi interface.
-- `_read()`/`_write()` returning `0` is used above for "interface not
-  running"; drivers should otherwise follow the same return-value contract
-  as any other dmdrvi driver (see RETURN VALUES).
+- `_read()`/`_write()` must return a negative errno-compatible value when the
+  interface is not running. Zero from `_read()` is reserved for EOF/no frame
+  and zero from `_write()` is only valid for a zero-length request.
+
+## VERSION 2.0 MIGRATION
+
+Version 2.0 is intentionally ABI-incompatible with 1.x. Driver DIF
+implementations must change their declaration version to `2.0`, replace
+`uint32_t` offsets with `dmdrvi_offset_t`, and return `dmdrvi_ssize_t` from
+read/write. Callers must handle negative results before converting a byte count
+to `size_t`. The MAL device-availability callbacks remain at version 1.0 because
+their signatures did not change.
 
 ## SEE ALSO
 
