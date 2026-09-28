@@ -14,6 +14,7 @@ dmdrvi is a driver interface module designed for embedded systems using the DMOD
 - **Standard Operations**: open, close, read, write, ioctl, flush, stat
 - **64-bit Addressing**: Explicit offset, size, and signed I/O-result types for devices larger than 4 GiB
 - **Block Device Controls**: Standard geometry, erase, and discard ioctls
+- **Monitor Controls**: Class-independent `GET_POLICY` / `EVENT` / `REFRESH` ioctls that let a monitor service handle presence detection, hot-plug and polling for a driver, so drivers never create threads for it
 - **Configuration Support**: Integration with dmini for device configuration
 - **Friends Groups**: Group related driver configurations and let drivers discover one another's device paths
 - **Dynamic Device Notifications**: Drivers can inform dmdevfs when a device becomes available or unavailable at runtime within an existing context
@@ -155,6 +156,16 @@ For guidance on implementing these commands inside a network driver's `dmdrvi_io
 - `DMDRVI_IOCTL_BLOCK_DISCARD` marks a `dmdrvi_block_range_t` unused without promising its read-back contents.
 
 All block ranges use 64-bit byte offsets and lengths. See the API reference for alignment and capability rules.
+
+## Monitor Ioctl Commands
+
+Drivers whose devices need work done over time (card insertion/removal, USB port changes, media or link polling) implement three class-independent commands instead of creating threads. A monitor service calls them:
+
+- `DMDRVI_IOCTL_MONITOR_GET_POLICY` - returns a `dmdrvi_monitor_policy_t`: the dmhaman handler whose calls are the node's events, the settle time after events and the poll interval. Called once when the monitor starts.
+- `DMDRVI_IOCTL_MONITOR_EVENT` - called immediately after every event. Fast and non-blocking; must not wait for in-flight I/O. It only records state or sets flags.
+- `DMDRVI_IOCTL_MONITOR_REFRESH` - called at monitor start, after events once they settled, and every poll interval. May block; announces or withdraws nodes through `dmdrvi_device_available()` / `dmdrvi_device_unavailable()`.
+
+Drivers without monitoring needs answer `-ENOTTY`. See [docs/dmdrvi.md](docs/dmdrvi.md#monitor-ioctl-commands) for the exact calling rules, examples and the recommended ini keys.
 
 ## Building
 

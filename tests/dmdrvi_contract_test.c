@@ -23,6 +23,13 @@ _Static_assert(_Generic((dmod_dmdrvi_write_t)0,
                        default: 0),
                "dmdrvi_write must use the 2.0 64-bit contract");
 
+_Static_assert(DMDRVI_IOCTL_MONITOR_GET_POLICY >= 0x200 &&
+               DMDRVI_IOCTL_MONITOR_REFRESH < DMDRVI_IOCTL_CUSTOM_BASE,
+               "monitor commands must stay in their own standard range");
+_Static_assert(sizeof(((dmdrvi_monitor_policy_t*)0)->event_handler) ==
+               DMDRVI_MONITOR_HANDLER_NAME_MAX,
+               "monitor policy must carry the handler name inline");
+
 static int contains(const char* text, const char* needle)
 {
     for( ; *text != '\0'; ++text )
@@ -78,4 +85,44 @@ DMOD_TEST_STEP(dmdrvi_errors_are_distinct_from_eof)
     const dmdrvi_ssize_t error = -1;
 
     DMOD_TEST_EXPECT_TRUE(error < eof);
+}
+
+DMOD_TEST_STEP(dmdrvi_monitor_commands_are_distinct)
+{
+    const int commands[] = {
+        DMDRVI_IOCTL_NET_SET_MAC_ADDR, DMDRVI_IOCTL_NET_GET_MAC_ADDR,
+        DMDRVI_IOCTL_NET_GET_LINK_STATUS, DMDRVI_IOCTL_NET_START, DMDRVI_IOCTL_NET_STOP,
+        DMDRVI_IOCTL_BLOCK_GET_INFO, DMDRVI_IOCTL_BLOCK_ERASE, DMDRVI_IOCTL_BLOCK_DISCARD,
+        DMDRVI_IOCTL_MONITOR_GET_POLICY, DMDRVI_IOCTL_MONITOR_EVENT, DMDRVI_IOCTL_MONITOR_REFRESH,
+    };
+    const int count = (int)(sizeof(commands) / sizeof(commands[0]));
+    int duplicates = 0;
+
+    for( int i = 0; i < count; ++i )
+    {
+        for( int j = i + 1; j < count; ++j )
+        {
+            duplicates += (commands[i] == commands[j]) ? 1 : 0;
+        }
+    }
+    DMOD_TEST_EXPECT_EQ(duplicates, 0);
+}
+
+DMOD_TEST_STEP(dmdrvi_monitor_policy_holds_longest_handler_name)
+{
+    dmdrvi_monitor_policy_t policy = { .settle_ms = 50, .poll_interval_ms = 0 };
+    const char* name = "a_handler_name_of_31_characters";   /* 31 + terminator */
+    int length = 0;
+
+    while( name[length] != '\0' )
+    {
+        policy.event_handler[length] = name[length];
+        ++length;
+    }
+    policy.event_handler[length] = '\0';
+
+    DMOD_TEST_EXPECT_EQ(length, (int)DMDRVI_MONITOR_HANDLER_NAME_MAX - 1);
+    DMOD_TEST_EXPECT_TRUE(contains(policy.event_handler, "31_characters"));
+    DMOD_TEST_EXPECT_EQ(policy.settle_ms, 50u);
+    DMOD_TEST_EXPECT_EQ(policy.poll_interval_ms, 0u);
 }

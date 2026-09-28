@@ -193,6 +193,126 @@ Erase and discard are separate operations. A driver advertises support with
 errno-compatible error. Ranges use 64-bit byte offsets and lengths and must be
 aligned to the device's reported requirements.
 
+### Monitor Ioctl Commands
+
+Some devices need work done over time: an SD card is inserted or pulled, a
+device is plugged into a USB port, a card reader's medium changes, an
+Ethernet link goes up or down. A driver must not create threads or
+processes for this. Instead it declares what should trigger it, and a
+monitor service - one process per monitored node, started by the system -
+waits for that and calls the driver back through three class-independent
+ioctls:
+
+| Command | `arg` type | Meaning |
+|---------|------------|---------|
+| `DMDRVI_IOCTL_MONITOR_GET_POLICY` | `dmdrvi_monitor_policy_t*` | What should trigger the monitor for this node |
+| `DMDRVI_IOCTL_MONITOR_EVENT` | `NULL` | An event arrived - react now, without blocking |
+| `DMDRVI_IOCTL_MONITOR_REFRESH` | `NULL` | Settle the state and announce/withdraw nodes |
+
+```c
+#define DMDRVI_MONITOR_HANDLER_NAME_MAX 32u
+
+typedef struct {
+    char     event_handler[DMDRVI_MONITOR_HANDLER_NAME_MAX]; /* dmhaman handler, "" = none */
+    uint32_t settle_ms;          /* quiet time after the last event before REFRESH */
+    uint32_t poll_interval_ms;   /* periodic REFRESH, 0 = no polling */
+} dmdrvi_monitor_policy_t;
+```
+
+A driver that needs no monitoring does not implement these commands and
+returns `-ENOTTY`, like for any unknown command.
+
+#### When each command is called
+
+The monitor sleeps until an event or the poll interval wakes it:
+
+```c
+ioctl(node, DMDRVI_IOCTL_MONITOR_GET_POLICY, &policy);
+register policy.event_handler with dmhaman;      /* its ISR only posts a semaphore */
+ioctl(node, DMDRVI_IOCTL_MONITOR_REFRESH, NULL);  /* initial state */
+
+for (;;) {
+    if (wait(semaphore, policy.poll_interval_ms ? policy.poll_interval_ms : forever) == event) {
+        do {
+            ioctl(node, DMDRVI_IOCTL_MONITOR_EVENT, NULL);
+            sleep(policy.settle_ms);
+        } while (more events arrived);            /* bounded number of rounds */
+    }
+    ioctl(node, DMDRVI_IOCTL_MONITOR_REFRESH, NULL);
+}
+```
+
+| Command | Called | The driver |
+|---------|--------|------------|
+| `GET_POLICY` | Once when the monitor starts, and again after it restarts | Fills the policy, normally from its own ini section. `-ENOTTY`: the node is not monitored |
+| `EVENT` | Immediately after every event, before the settle time - possibly several times per burst (contact bounce) | Must return quickly and **must not wait for in-flight I/O**: it may run concurrently with `read`/`write` on the same context, so it must not take a lock that I/O holds for long. It may only record state or set flags - typically to make an operation on a medium that is going away fail at once instead of running into its timeouts. It never announces or withdraws nodes. Returns 0 when there is nothing to do |
+| `REFRESH` | 1) once when the monitor starts - this also covers events that happened before the monitor ran; 2) after events, once `settle_ms` passed without a new one; 3) every `poll_interval_ms` when non-zero | May block and is serialized with I/O. Determines the actual state (probe, identify, verify, detach) and is the only place that calls `dmdrvi_device_available()` / `dmdrvi_device_unavailable()`. Returns 0 when something is attached behind the node, `-ENODEV` when nothing is, another negative errno value on failure |
+
+All three are called from thread context only, never from an interrupt.
+`EVENT` has no meaning without `event_handler`; with neither an event
+handler nor a poll interval, the monitor calls `REFRESH` once and exits.
+
+#### Event source
+
+An event is a call of the dmhaman handler named in `event_handler`. The
+monitor registers that handler; it runs in interrupt context and only wakes
+the monitor. Who fires it does not matter:
+
+* another driver - for example dmgpio calling its `interrupt_handler` on a
+  card detect edge, with the GPIO device in the same friends group;
+* the driver's own ISR - for example a USB host controller calling
+  `dmhaman_call_handler()` on a port-change interrupt.
+
+#### Examples
+
+| Driver | `event_handler` | `poll_interval_ms` | `EVENT` | `REFRESH` |
+|--------|-----------------|--------------------|---------|-----------|
+| SD host with a card detect pin | dmgpio edge interrupt of the pin | 0 | Sample the pin without the I/O lock; if the slot is empty, flag the card as removed so a running transfer aborts with `-ENODEV` | Identify, verify (CMD13) or detach the card; announce/withdraw the card node |
+| SD host without card detect | `""` | e.g. 1000 | - | Same as above, periodically |
+| USB host controller | port-change interrupt, fired by the driver's own ISR | 0 | Remember which ports changed | Enumerate new devices, remove disconnected ones (control transfers with delays - hence not in the ISR) |
+| USB mass-storage card reader | `""` | e.g. 1000 | - | TEST UNIT READY; announce/withdraw the medium |
+| Ethernet PHY | PHY interrupt, or `""` | 0 or e.g. 1000 | - | Read the link state |
+
+#### Configuration keys
+
+The policy belongs to the device's configuration. Drivers should read it
+from their ini section under these names, so every board file looks the
+same:
+
+| Key | Policy field |
+|-----|--------------|
+| `monitor_event_handler` | `event_handler` |
+| `monitor_settle_ms` | `settle_ms` |
+| `poll_interval_ms` | `poll_interval_ms` |
+
+#### Implementing the commands
+
+```c
+dmod_dmdrvi_dif_api_declaration(2.0, mydrv, int, _ioctl,
+    ( dmdrvi_context_t ctx, void* handle, int command, void* arg ))
+{
+    switch (command)
+    {
+        case DMDRVI_IOCTL_MONITOR_GET_POLICY:
+            *(dmdrvi_monitor_policy_t*)arg = ctx->policy;   /* read in _create */
+            return 0;
+        case DMDRVI_IOCTL_MONITOR_EVENT:
+            /* no I/O lock here */
+            if (!medium_present(ctx)) { ctx->removal_pending = true; }
+            return 0;
+        case DMDRVI_IOCTL_MONITOR_REFRESH:
+        {
+            lock(ctx);
+            int ret = rescan(ctx);   /* calls dmdrvi_device_available/_unavailable */
+            unlock(ctx);
+            return ret;
+        }
+        /* ... */
+    }
+    return -ENOTTY;
+}
+```
+
 ### Network Driver Ioctl Commands
 
 `dmdrvi_ioctl.h` defines control-plane ioctl commands intended for network
@@ -639,11 +759,12 @@ the hardware access itself.
   address has been set yet, or apply the cached address as part of handling
   `DMDRVI_IOCTL_NET_START` - matching the bring-up sequence recommended above
   (`SET_MAC_ADDR` then `START`).
-- Link-state changes are only observable by polling
-  `DMDRVI_IOCTL_NET_GET_LINK_STATUS` - dmdrvi has no built-in event or
-  notification mechanism for it. A driver that needs to push link-change
-  events to upper layers has to do so through its own mechanism, outside of
-  the dmdrvi interface.
+- Upper layers read the link state with
+  `DMDRVI_IOCTL_NET_GET_LINK_STATUS`; dmdrvi does not push link-change
+  events to them. If the driver itself has to follow the PHY over time
+  (poll it, or service a PHY interrupt in thread context), it implements the
+  monitor commands (see "Monitor Ioctl Commands") instead of creating a
+  thread.
 - `_read()`/`_write()` must return a negative errno-compatible value when the
   interface is not running. Zero from `_read()` is reserved for EOF/no frame
   and zero from `_write()` is only valid for a zero-length request.
@@ -656,6 +777,13 @@ implementations must change their declaration version to `2.0`, replace
 read/write. Callers must handle negative results before converting a byte count
 to `size_t`. The MAL device-availability callbacks remain at version 1.0 because
 their signatures did not change.
+
+## VERSION 2.1
+
+Adds the monitor ioctl commands (`DMDRVI_IOCTL_MONITOR_*`,
+`dmdrvi_monitor_policy_t`). The change is purely additive: no DIF or MAL
+signature changed, drivers keep their `2.0` declarations, and a driver that
+does not implement the new commands keeps answering `-ENOTTY`.
 
 ## SEE ALSO
 
