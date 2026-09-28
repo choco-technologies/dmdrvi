@@ -117,6 +117,67 @@ typedef struct
  */
 #define DMDRVI_IOCTL_BLOCK_DISCARD           0x102
 
+/*
+ * Monitor commands - class-independent (a USB host controller node is not a
+ * block device). They let a driver have work done over time - presence
+ * detection, hot-plug, media or link polling - without creating threads of
+ * its own: the driver declares what should trigger it (GET_POLICY), a
+ * monitor service waits for that and calls EVENT (urgent, non-blocking) and
+ * REFRESH (settles the state). See docs/dmdrvi.md, "Monitor Ioctl Commands",
+ * for when each command is called and what a driver may do in it.
+ *
+ * A driver that needs no monitoring does not implement them (-ENOTTY).
+ * All three are called from thread context only, never from an ISR.
+ */
+
+/** Longest event handler name in dmdrvi_monitor_policy_t, including the terminator. */
+#define DMDRVI_MONITOR_HANDLER_NAME_MAX      32u
+
+/** What should trigger the monitor for a node. */
+typedef struct
+{
+    /** dmhaman handler whose calls are the node's events ("" = no events).
+     *  Fired from interrupt context by another driver (e.g. a dmgpio edge
+     *  interrupt) or by the driver's own ISR. */
+    char     event_handler[DMDRVI_MONITOR_HANDLER_NAME_MAX];
+    uint32_t settle_ms;          /**< Quiet time after the last event before REFRESH */
+    uint32_t poll_interval_ms;   /**< Periodic REFRESH interval, 0 = no polling */
+} dmdrvi_monitor_policy_t;
+
+/**
+ * Read the monitoring policy of a node. Called once when the monitor starts
+ * (and again after it restarts). -ENOTTY means the node is not monitored.
+ *
+ * arg: dmdrvi_monitor_policy_t* - output buffer
+ */
+#define DMDRVI_IOCTL_MONITOR_GET_POLICY      0x200
+
+/**
+ * An event arrived. Called right after every event, before the settle time.
+ * Must return quickly and must not wait for in-flight I/O - it may run
+ * concurrently with read/write on the same context. It may only record
+ * state or set flags (e.g. make a transfer on a pulled card fail at once);
+ * nodes are announced or withdrawn only by REFRESH. Return 0 when there is
+ * nothing to do.
+ *
+ * arg: NULL
+ */
+#define DMDRVI_IOCTL_MONITOR_EVENT           0x201
+
+/**
+ * Settle the state behind the node. Called once when the monitor starts,
+ * after events once settle_ms passed without a new one, and every
+ * poll_interval_ms if non-zero. May block; serialized with I/O. Announces or
+ * withdraws nodes through dmdrvi_device_available() /
+ * dmdrvi_device_unavailable().
+ *
+ * Returns 0 when something is attached behind the node, -ENODEV when nothing
+ * is, another negative errno value on failure.
+ *
+ * arg: NULL
+ */
+#define DMDRVI_IOCTL_MONITOR_REFRESH         0x202
+
 /**
  * @brief Start of the reserved range for driver-specific custom ioctl commands
  *
@@ -125,8 +186,9 @@ typedef struct
  * this base, not from "last standard command + 1" - the standard command
  * set above is expected to grow over time, and a driver numbering its own
  * commands relative to whichever one happens to be last today would silently
- * collide with a new standard command added later. Leaves generous headroom
- * (4095 possible standard commands per category) before reaching this base.
+ * collide with a new standard command added later. Standard categories are
+ * spaced 0x100 apart (network 0x01, block 0x100, monitor 0x200), which
+ * leaves generous headroom before reaching this base.
  */
 #define DMDRVI_IOCTL_CUSTOM_BASE              0x1000
 
