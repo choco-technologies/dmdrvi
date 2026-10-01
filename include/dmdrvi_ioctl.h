@@ -2,6 +2,7 @@
 #define DMDRVI_IOCTL_H
 
 #include <stdint.h>
+#include <stdbool.h>
 #include "dmdrvi_types.h"
 
 #ifdef __cplusplus
@@ -178,6 +179,120 @@ typedef struct
  */
 #define DMDRVI_IOCTL_MONITOR_REFRESH         0x202
 
+/*
+ * Graphics commands - for any device exposing a framebuffer (LCD-TFT
+ * controller, SPI display, ...). Generic code needs only the path of the
+ * device node: GET_INFO gives resolution, pixel format and stride, so it can
+ * draw without knowing which driver is behind the node. Reading/writing the
+ * node accesses the drawing buffer at the given byte offset.
+ *
+ * Optional commands a driver cannot honour return -ENOTSUP, unknown ones
+ * -ENOTTY.
+ */
+
+/** Pixel format of a framebuffer. */
+typedef enum
+{
+    DMDRVI_GFX_PIXEL_FORMAT_ARGB8888 = 0,  /**< 32 bpp, A in the top byte */
+    DMDRVI_GFX_PIXEL_FORMAT_RGB888,        /**< 24 bpp, packed */
+    DMDRVI_GFX_PIXEL_FORMAT_RGB565,        /**< 16 bpp */
+    DMDRVI_GFX_PIXEL_FORMAT_ARGB1555,      /**< 16 bpp, 1-bit alpha */
+    DMDRVI_GFX_PIXEL_FORMAT_ARGB4444,      /**< 16 bpp, 4-bit alpha */
+
+    DMDRVI_GFX_PIXEL_FORMAT_COUNT
+} dmdrvi_gfx_pixel_format_t;
+
+/** Geometry and format of a framebuffer device. */
+typedef struct
+{
+    uint16_t                  width;             /**< Active width in pixels */
+    uint16_t                  height;            /**< Active height in lines */
+    dmdrvi_gfx_pixel_format_t pixel_format;      /**< Framebuffer pixel format */
+    uint8_t                   bytes_per_pixel;   /**< Bytes of one pixel */
+    uint32_t                  stride;            /**< Bytes of one line */
+    uint32_t                  framebuffer_size;  /**< Bytes of one buffer (stride * height) */
+    uint8_t                   buffer_count;      /**< 1, or 2 when double buffered */
+} dmdrvi_gfx_info_t;
+
+/**
+ * Rectangle fill. The rectangle is clipped to the screen. The color is always
+ * 0xAARRGGBB and converted to the framebuffer's pixel format by the driver.
+ */
+typedef struct
+{
+    uint16_t x;          /**< Left column */
+    uint16_t y;          /**< Top line */
+    uint16_t width;      /**< Width in pixels */
+    uint16_t height;     /**< Height in lines */
+    uint32_t color;      /**< 0xAARRGGBB */
+} dmdrvi_gfx_fill_rect_t;
+
+/**
+ * Read resolution, pixel format, stride and buffer count.
+ *
+ * arg: dmdrvi_gfx_info_t* - output buffer
+ */
+#define DMDRVI_IOCTL_GFX_GET_INFO             0x300
+
+/**
+ * Get the buffer to draw into (for direct drawing; flush the cache afterwards
+ * if the core has one).
+ *
+ * arg: void** - receives the buffer address (output)
+ */
+#define DMDRVI_IOCTL_GFX_GET_FRAMEBUFFER      0x301
+
+/**
+ * Show the drawing buffer from the next frame on and draw into the other one.
+ * -ENOTSUP when the device has a single buffer.
+ *
+ * arg: NULL
+ */
+#define DMDRVI_IOCTL_GFX_SWAP_BUFFERS         0x302
+
+/**
+ * Block until the next vertical blanking. -ETIMEDOUT on timeout, -EAGAIN
+ * while the display is disabled.
+ *
+ * arg: const uint32_t* - timeout in ms, or NULL for the driver default
+ */
+#define DMDRVI_IOCTL_GFX_WAIT_VSYNC           0x303
+
+/**
+ * Fill a rectangle with a color.
+ *
+ * arg: const dmdrvi_gfx_fill_rect_t* - input
+ */
+#define DMDRVI_IOCTL_GFX_FILL_RECT            0x304
+
+/**
+ * Enable or disable scan-out.
+ *
+ * arg: const bool* - input
+ */
+#define DMDRVI_IOCTL_GFX_SET_DISPLAY_ENABLED  0x305
+
+/**
+ * Read whether scan-out is enabled.
+ *
+ * arg: bool* - output
+ */
+#define DMDRVI_IOCTL_GFX_GET_DISPLAY_ENABLED  0x306
+
+/**
+ * Switch the backlight (only lit while the display is enabled).
+ *
+ * arg: const bool* - input
+ */
+#define DMDRVI_IOCTL_GFX_SET_BACKLIGHT        0x307
+
+/**
+ * Read the backlight state.
+ *
+ * arg: bool* - output
+ */
+#define DMDRVI_IOCTL_GFX_GET_BACKLIGHT        0x308
+
 /**
  * @brief Start of the reserved range for driver-specific custom ioctl commands
  *
@@ -187,7 +302,7 @@ typedef struct
  * set above is expected to grow over time, and a driver numbering its own
  * commands relative to whichever one happens to be last today would silently
  * collide with a new standard command added later. Standard categories are
- * spaced 0x100 apart (network 0x01, block 0x100, monitor 0x200), which
+ * spaced 0x100 apart (network 0x01, block 0x100, monitor 0x200, graphics 0x300), which
  * leaves generous headroom before reaching this base.
  */
 #define DMDRVI_IOCTL_CUSTOM_BASE              0x1000
