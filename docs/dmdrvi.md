@@ -193,6 +193,18 @@ Erase and discard are separate operations. A driver advertises support with
 errno-compatible error. Ranges use 64-bit byte offsets and lengths and must be
 aligned to the device's reported requirements.
 
+### Graphics Ioctl Commands
+
+Any device exposing a framebuffer (LCD-TFT controller, SPI display, ...)
+implements the standard `DMDRVI_IOCTL_GFX_*` commands (0x300 range), so a
+generic graphics library only needs the device path: `GET_INFO` returns a
+`dmdrvi_gfx_info_t` (resolution, `dmdrvi_gfx_pixel_format_t`, bytes per pixel,
+stride, buffer count). The others are `GET_FRAMEBUFFER`, `SWAP_BUFFERS`,
+`WAIT_VSYNC`, `FILL_RECT` (`0xAARRGGBB`, converted by the driver),
+`SET/GET_DISPLAY_ENABLED` and `SET/GET_BACKLIGHT`. Reading/writing the node
+accesses the drawing buffer at the given byte offset. Commands a driver cannot
+honour return `-ENOTSUP`; driver-specific ones use `DMDRVI_IOCTL_CUSTOM_BASE`.
+
 ### Monitor Ioctl Commands
 
 Some devices need work done over time: an SD card is inserted or pulled, a

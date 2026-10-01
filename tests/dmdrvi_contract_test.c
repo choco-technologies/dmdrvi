@@ -26,6 +26,9 @@ _Static_assert(_Generic((dmod_dmdrvi_write_t)0,
 _Static_assert(DMDRVI_IOCTL_MONITOR_GET_POLICY >= 0x200 &&
                DMDRVI_IOCTL_MONITOR_REFRESH < DMDRVI_IOCTL_CUSTOM_BASE,
                "monitor commands must stay in their own standard range");
+_Static_assert(DMDRVI_IOCTL_GFX_GET_INFO >= 0x300 &&
+               DMDRVI_IOCTL_GFX_GET_BACKLIGHT < DMDRVI_IOCTL_CUSTOM_BASE,
+               "graphics commands must stay in their own standard range");
 _Static_assert(sizeof(((dmdrvi_monitor_policy_t*)0)->event_handler) ==
                DMDRVI_MONITOR_HANDLER_NAME_MAX,
                "monitor policy must carry the handler name inline");
