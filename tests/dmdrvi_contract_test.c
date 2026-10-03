@@ -29,6 +29,13 @@ _Static_assert(DMDRVI_IOCTL_MONITOR_GET_POLICY >= 0x200 &&
 _Static_assert(DMDRVI_IOCTL_GFX_GET_INFO >= 0x300 &&
                DMDRVI_IOCTL_GFX_GET_BACKLIGHT < DMDRVI_IOCTL_CUSTOM_BASE,
                "graphics commands must stay in their own standard range");
+_Static_assert(DMDRVI_IOCTL_INPUT_GET_INFO >= 0x400 &&
+               DMDRVI_IOCTL_INPUT_WAIT_EVENT < DMDRVI_IOCTL_CUSTOM_BASE,
+               "input commands must stay in their own standard range");
+_Static_assert(sizeof(dmdrvi_input_contact_t) == 8,
+               "input contacts must have no padding");
+_Static_assert(sizeof(dmdrvi_input_state_t) == 12 + 8 * DMDRVI_INPUT_MAX_CONTACTS,
+               "input states must have no padding, so they compare byte by byte");
 _Static_assert(sizeof(((dmdrvi_monitor_policy_t*)0)->event_handler) ==
                DMDRVI_MONITOR_HANDLER_NAME_MAX,
                "monitor policy must carry the handler name inline");
@@ -97,6 +104,8 @@ DMOD_TEST_STEP(dmdrvi_monitor_commands_are_distinct)
         DMDRVI_IOCTL_NET_GET_LINK_STATUS, DMDRVI_IOCTL_NET_START, DMDRVI_IOCTL_NET_STOP,
         DMDRVI_IOCTL_BLOCK_GET_INFO, DMDRVI_IOCTL_BLOCK_ERASE, DMDRVI_IOCTL_BLOCK_DISCARD,
         DMDRVI_IOCTL_MONITOR_GET_POLICY, DMDRVI_IOCTL_MONITOR_EVENT, DMDRVI_IOCTL_MONITOR_REFRESH,
+        DMDRVI_IOCTL_GFX_GET_INFO, DMDRVI_IOCTL_GFX_GET_BACKLIGHT,
+        DMDRVI_IOCTL_INPUT_GET_INFO, DMDRVI_IOCTL_INPUT_GET_STATE, DMDRVI_IOCTL_INPUT_WAIT_EVENT,
     };
     const int count = (int)(sizeof(commands) / sizeof(commands[0]));
     int duplicates = 0;
@@ -128,4 +137,17 @@ DMOD_TEST_STEP(dmdrvi_monitor_policy_holds_longest_handler_name)
     DMOD_TEST_EXPECT_TRUE(contains(policy.event_handler, "31_characters"));
     DMOD_TEST_EXPECT_EQ(policy.settle_ms, 50u);
     DMOD_TEST_EXPECT_EQ(policy.poll_interval_ms, 0u);
+}
+
+DMOD_TEST_STEP(dmdrvi_input_states_compare_every_field)
+{
+    dmdrvi_input_state_t a = { 0 };
+    dmdrvi_input_state_t b = { 0 };
+
+    DMOD_TEST_EXPECT_TRUE(dmdrvi_input_state_equal(&a, &b));
+    b.contacts[DMDRVI_INPUT_MAX_CONTACTS - 1].size = 1;
+    DMOD_TEST_EXPECT_FALSE(dmdrvi_input_state_equal(&a, &b));
+    b = a;
+    b.buttons = DMDRVI_INPUT_BUTTON_LEFT;
+    DMOD_TEST_EXPECT_FALSE(dmdrvi_input_state_equal(&a, &b));
 }

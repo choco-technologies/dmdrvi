@@ -14,6 +14,7 @@ dmdrvi is a driver interface module designed for embedded systems using the DMOD
 - **Standard Operations**: open, close, read, write, ioctl, flush, stat
 - **64-bit Addressing**: Explicit offset, size, and signed I/O-result types for devices larger than 4 GiB
 - **Block Device Controls**: Standard geometry, erase, and discard ioctls
+- **Input Controls**: Standard info / state / wait-for-event ioctls for touch panels, mice and buttons, so higher layers use every input device the same way
 - **Monitor Controls**: Class-independent `GET_POLICY` / `EVENT` / `REFRESH` ioctls that let a monitor service handle presence detection, hot-plug and polling for a driver, so drivers never create threads for it
 - **Configuration Support**: Integration with dmini for device configuration
 - **Friends Groups**: Group related driver configurations and let drivers discover one another's device paths
@@ -168,6 +169,18 @@ stride, buffer count). The others are `GET_FRAMEBUFFER`, `SWAP_BUFFERS`,
 `SET/GET_DISPLAY_ENABLED` and `SET/GET_BACKLIGHT`. Reading/writing the node
 accesses the drawing buffer at the given byte offset. Commands a driver cannot
 honour return `-ENOTSUP`; driver-specific ones use `DMDRVI_IOCTL_CUSTOM_BASE`.
+
+## Input Ioctl Commands
+
+Any device a user touches, moves or presses (touch panel, mouse, buttons)
+implements the standard `DMDRVI_IOCTL_INPUT_*` commands (0x400 range), so a
+GUI library or a test tool only needs the device path, whatever the driver:
+
+- `DMDRVI_IOCTL_INPUT_GET_INFO` - returns a `dmdrvi_input_info_t`: name, `dmdrvi_input_type_t`, `DMDRVI_INPUT_CAP_*` capability bits, coordinate range, maximum number of contacts and buttons.
+- `DMDRVI_IOCTL_INPUT_GET_STATE` - returns the current `dmdrvi_input_state_t` (buttons, relative motion, wheel, contacts in screen coordinates). `read()` of the node returns the same.
+- `DMDRVI_IOCTL_INPUT_WAIT_EVENT` - blocks until the state changes (`const uint32_t*` timeout in ms, `NULL` = forever), `-ETIMEDOUT` on timeout.
+
+See [docs/dmdrvi.md](docs/dmdrvi.md#input-ioctl-commands) for the state rules, the recommended ini keys and an example.
 
 ## Monitor Ioctl Commands
 

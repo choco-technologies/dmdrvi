@@ -293,6 +293,151 @@ typedef struct
  */
 #define DMDRVI_IOCTL_GFX_GET_BACKLIGHT        0x308
 
+/*
+ * Input commands - for any device a user touches, moves or presses (touch
+ * panel, mouse, buttons). Generic code (a GUI library, a test tool) needs
+ * only the path of the device node: GET_INFO tells what the device reports,
+ * read() and GET_STATE return its current state as one dmdrvi_input_state_t
+ * whatever the driver, WAIT_EVENT sleeps until that state changes.
+ *
+ * Coordinates are always screen coordinates: the driver applies its own
+ * configuration (axis swap, mirroring, clipping) before reporting them.
+ * Commands a driver cannot honour return -ENOTSUP, unknown ones -ENOTTY.
+ */
+
+/** Most contacts one dmdrvi_input_state_t carries. */
+#define DMDRVI_INPUT_MAX_CONTACTS            10u
+
+/** Longest device name in dmdrvi_input_info_t, including the terminator. */
+#define DMDRVI_INPUT_NAME_MAX                16u
+
+/** Kind of input device. */
+typedef enum
+{
+    DMDRVI_INPUT_TYPE_TOUCHSCREEN = 0,  /**< Contacts on top of a display */
+    DMDRVI_INPUT_TYPE_MOUSE,            /**< Relative motion and buttons */
+    DMDRVI_INPUT_TYPE_BUTTONS,          /**< Buttons or keys only */
+
+    DMDRVI_INPUT_TYPE_COUNT
+} dmdrvi_input_type_t;
+
+/** Reports contacts with screen coordinates (contacts, contact_count). */
+#define DMDRVI_INPUT_CAP_CONTACTS            (1u << 0)
+
+/** Reports relative motion (dx, dy). */
+#define DMDRVI_INPUT_CAP_MOTION              (1u << 1)
+
+/** Reports a scroll wheel (wheel). */
+#define DMDRVI_INPUT_CAP_WHEEL               (1u << 2)
+
+/** Reports buttons (buttons). */
+#define DMDRVI_INPUT_CAP_BUTTONS             (1u << 3)
+
+/** Contacts carry a pressure (otherwise it is 0). */
+#define DMDRVI_INPUT_CAP_PRESSURE            (1u << 4)
+
+/** Contacts carry a size (otherwise it is 0). */
+#define DMDRVI_INPUT_CAP_CONTACT_SIZE        (1u << 5)
+
+/** WAIT_EVENT is woken by an interrupt; without it the driver polls. */
+#define DMDRVI_INPUT_CAP_INTERRUPT           (1u << 6)
+
+/** Bits of dmdrvi_input_state_t::buttons - bit n is button n. */
+#define DMDRVI_INPUT_BUTTON_LEFT             (1u << 0)
+#define DMDRVI_INPUT_BUTTON_RIGHT            (1u << 1)
+#define DMDRVI_INPUT_BUTTON_MIDDLE           (1u << 2)
+
+/** What happened to a contact. */
+typedef enum
+{
+    DMDRVI_INPUT_CONTACT_DOWN = 0,  /**< Has just touched */
+    DMDRVI_INPUT_CONTACT_MOVE,      /**< Stays down (moved or not) */
+    DMDRVI_INPUT_CONTACT_UP,        /**< Has just been lifted - its last report */
+} dmdrvi_input_contact_event_t;
+
+/** What an input device reports. */
+typedef struct
+{
+    char                name[DMDRVI_INPUT_NAME_MAX]; /**< Device model, e.g. "FT5336" */
+    dmdrvi_input_type_t type;           /**< Kind of device */
+    uint32_t            capabilities;   /**< DMDRVI_INPUT_CAP_* bits */
+    uint16_t            width;          /**< Contact x is 0..width-1, 0 = unknown */
+    uint16_t            height;         /**< Contact y is 0..height-1, 0 = unknown */
+    uint8_t             max_contacts;   /**< Simultaneous contacts, <= DMDRVI_INPUT_MAX_CONTACTS */
+    uint8_t             button_count;   /**< Number of buttons, <= 32 */
+} dmdrvi_input_info_t;
+
+/** One contact (finger, stylus), in screen coordinates. */
+typedef struct
+{
+    uint16_t x;          /**< Column */
+    uint16_t y;          /**< Line */
+    uint8_t  id;         /**< Stays the same while the contact moves */
+    uint8_t  event;      /**< dmdrvi_input_contact_event_t */
+    uint8_t  pressure;   /**< 0 without DMDRVI_INPUT_CAP_PRESSURE */
+    uint8_t  size;       /**< 0 without DMDRVI_INPUT_CAP_CONTACT_SIZE */
+} dmdrvi_input_contact_t;
+
+/**
+ * State of an input device - what read() of the node and GET_STATE return.
+ *
+ * Fields the device does not report, contacts beyond contact_count and
+ * reserved are zero, so two states compare byte by byte
+ * (dmdrvi_input_state_equal()). dx, dy and wheel add up since the previous
+ * state was handed out - handing it out resets them.
+ */
+typedef struct
+{
+    uint32_t               buttons;         /**< DMDRVI_INPUT_BUTTON_* bits, set = pressed */
+    int16_t                dx;              /**< Motion to the right */
+    int16_t                dy;              /**< Motion down */
+    int16_t                wheel;           /**< Scroll steps, positive = away from the user */
+    uint8_t                contact_count;   /**< 0 = nothing touches */
+    uint8_t                reserved;
+    dmdrvi_input_contact_t contacts[DMDRVI_INPUT_MAX_CONTACTS];
+} dmdrvi_input_state_t;
+
+/**
+ * Compare two input states byte by byte. dmod modules have no libc
+ * memcmp(); the state has no padding, so this compares every field.
+ */
+static inline bool dmdrvi_input_state_equal(const dmdrvi_input_state_t* a, const dmdrvi_input_state_t* b)
+{
+    const uint8_t* pa = (const uint8_t*)a;
+    const uint8_t* pb = (const uint8_t*)b;
+
+    for (uint32_t i = 0; i < (uint32_t)sizeof(dmdrvi_input_state_t); i++)
+    {
+        if (pa[i] != pb[i])
+            return false;
+    }
+    return true;
+}
+
+/**
+ * Read what the device reports.
+ *
+ * arg: dmdrvi_input_info_t* - output buffer
+ */
+#define DMDRVI_IOCTL_INPUT_GET_INFO           0x400
+
+/**
+ * Read the current state - the same as read() of the node.
+ *
+ * arg: dmdrvi_input_state_t* - output buffer
+ */
+#define DMDRVI_IOCTL_INPUT_GET_STATE          0x401
+
+/**
+ * Block until the state differs from the one handed out last, or an event
+ * arrived. A change between two waits is not lost. Read the state afterwards
+ * - it may also equal the previous one (the event changed nothing visible).
+ * -ETIMEDOUT on timeout.
+ *
+ * arg: const uint32_t* - timeout in ms, or NULL to wait forever
+ */
+#define DMDRVI_IOCTL_INPUT_WAIT_EVENT         0x402
+
 /**
  * @brief Start of the reserved range for driver-specific custom ioctl commands
  *
@@ -302,8 +447,9 @@ typedef struct
  * set above is expected to grow over time, and a driver numbering its own
  * commands relative to whichever one happens to be last today would silently
  * collide with a new standard command added later. Standard categories are
- * spaced 0x100 apart (network 0x01, block 0x100, monitor 0x200, graphics 0x300), which
- * leaves generous headroom before reaching this base.
+ * spaced 0x100 apart (network 0x01, block 0x100, monitor 0x200, graphics
+ * 0x300, input 0x400), which leaves generous headroom before reaching this
+ * base.
  */
 #define DMDRVI_IOCTL_CUSTOM_BASE              0x1000
 
