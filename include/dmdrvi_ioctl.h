@@ -438,6 +438,41 @@ static inline bool dmdrvi_input_state_equal(const dmdrvi_input_state_t* a, const
  */
 #define DMDRVI_IOCTL_INPUT_WAIT_EVENT         0x402
 
+/*
+ * Device file system commands (0xF00 range) - answered by the file system
+ * that exposes the node (dmdevfs), never passed to the driver. They give
+ * everybody, not only drivers (dmdrvi_friend_changed()), access to what the
+ * file system knows about a node.
+ */
+
+/**
+ * Another member of a node's friends_group. The caller provides the buffers:
+ * the lengths are always filled in, so a call with NULL buffers (or too small
+ * ones, -ERANGE) tells how much to allocate.
+ */
+typedef struct
+{
+    uint32_t index;         /**< In: which member, from 0 */
+    char*    path;          /**< In: buffer for the absolute path of its node, e.g. "/dev/touch" (may be NULL) */
+    size_t   path_size;     /**< In: size of path in bytes */
+    char*    role;          /**< In: buffer for its friend_role, "" when it has none (may be NULL) */
+    size_t   role_size;     /**< In: size of role in bytes */
+    size_t   path_length;   /**< Out: length of the path, without the terminator */
+    size_t   role_length;   /**< Out: length of the role, without the terminator */
+} dmdrvi_devfs_friend_t;
+
+/**
+ * Get the index-th other member of the node's friends_group - e.g. a display
+ * service looking for the touch panel of its display. Members are numbered
+ * in configuration order; members whose node has no path yet are skipped.
+ * -ENOENT when there is no such member (or the node has no group), -ERANGE
+ * when a buffer is too small (path_length / role_length are still filled in,
+ * nothing is copied).
+ *
+ * arg: dmdrvi_devfs_friend_t* - index and buffers in, strings and lengths out
+ */
+#define DMDRVI_IOCTL_DEVFS_GET_FRIEND        0xF00
+
 /**
  * @brief Start of the reserved range for driver-specific custom ioctl commands
  *
@@ -448,8 +483,8 @@ static inline bool dmdrvi_input_state_equal(const dmdrvi_input_state_t* a, const
  * commands relative to whichever one happens to be last today would silently
  * collide with a new standard command added later. Standard categories are
  * spaced 0x100 apart (network 0x01, block 0x100, monitor 0x200, graphics
- * 0x300, input 0x400), which leaves generous headroom before reaching this
- * base.
+ * 0x300, input 0x400; 0xF00 is reserved for the device file system), which
+ * leaves generous headroom before reaching this base.
  */
 #define DMDRVI_IOCTL_CUSTOM_BASE              0x1000
 

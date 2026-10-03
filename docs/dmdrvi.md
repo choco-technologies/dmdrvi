@@ -309,6 +309,33 @@ names, so every board file looks the same:
 | `interrupt_handler` | dmhaman handler of the device's interrupt pin (empty = poll) |
 | `poll_interval_ms` | Polling period of `WAIT_EVENT` without an interrupt |
 
+### Device File System Ioctl Commands
+
+Commands in the 0xF00 range are answered by the file system that exposes
+the node (dmdevfs) and never reach the driver. They give every module - not
+only drivers, which get `dmdrvi_friend_changed()` - access to what the file
+system knows about a node.
+
+| Command | `arg` type | Meaning |
+|---------|------------|---------|
+| `DMDRVI_IOCTL_DEVFS_GET_FRIEND` | `dmdrvi_devfs_friend_t*` | The `index`-th other member of the node's `friends_group`: its absolute `path` and `role`; `-ENOENT` when there is none |
+
+There is no length limit: the caller passes its own buffers, and
+`path_length` / `role_length` are always filled in. With NULL buffers (or
+too small ones, `-ERANGE`) the call only reports the lengths:
+
+```c
+dmdrvi_devfs_friend_t f = { .index = 0 };
+while (Dmod_Ioctl(display, DMDRVI_IOCTL_DEVFS_GET_FRIEND, &f) == -ERANGE) {   /* NULL buffers: lengths only */
+    f.path = Dmod_Malloc(f.path_length + 1);  f.path_size = f.path_length + 1;
+    f.role = Dmod_Malloc(f.role_length + 1);  f.role_size = f.role_length + 1;
+    Dmod_Ioctl(display, DMDRVI_IOCTL_DEVFS_GET_FRIEND, &f);
+    /* f.path, f.role ... */
+    Dmod_Free(f.path);  Dmod_Free(f.role);
+    f = (dmdrvi_devfs_friend_t){ .index = f.index + 1 };
+}
+```
+
 ### Monitor Ioctl Commands
 
 Some devices need work done over time: an SD card is inserted or pulled, a
