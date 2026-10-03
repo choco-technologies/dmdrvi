@@ -166,8 +166,13 @@ generic graphics library only needs the device path: `GET_INFO` returns a
 `dmdrvi_gfx_info_t` (resolution, `dmdrvi_gfx_pixel_format_t`, bytes per pixel,
 stride, buffer count). The others are `GET_FRAMEBUFFER`, `SWAP_BUFFERS`,
 `WAIT_VSYNC`, `FILL_RECT` (`0xAARRGGBB`, converted by the driver),
-`SET/GET_DISPLAY_ENABLED` and `SET/GET_BACKLIGHT`. Reading/writing the node
-accesses the drawing buffer at the given byte offset. Commands a driver cannot
+`SET/GET_DISPLAY_ENABLED`, `SET/GET_BACKLIGHT` and `PRESENT`. `PRESENT`
+makes the drawing visible whatever the buffer count: double buffered, it shows
+the drawing buffer at the next frame and copies the area drawn into the other
+buffer, so a client that redraws only what changed draws without tearing and
+without redrawing the rest; single buffered, it writes the area back from the
+data cache. Reading/writing the node accesses the drawing buffer at the given
+byte offset. Commands a driver cannot
 honour return `-ENOTSUP`; driver-specific ones use `DMDRVI_IOCTL_CUSTOM_BASE`.
 
 ## Input Ioctl Commands

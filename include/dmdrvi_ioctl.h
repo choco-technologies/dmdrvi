@@ -227,6 +227,15 @@ typedef struct
     uint32_t color;      /**< 0xAARRGGBB */
 } dmdrvi_gfx_fill_rect_t;
 
+/** Rectangle of the screen (DMDRVI_IOCTL_GFX_PRESENT). */
+typedef struct
+{
+    uint16_t x;          /**< Left column */
+    uint16_t y;          /**< Top line */
+    uint16_t width;      /**< Width in pixels */
+    uint16_t height;     /**< Height in lines */
+} dmdrvi_gfx_rect_t;
+
 /**
  * Read resolution, pixel format, stride and buffer count.
  *
@@ -292,6 +301,28 @@ typedef struct
  * arg: bool* - output
  */
 #define DMDRVI_IOCTL_GFX_GET_BACKLIGHT        0x308
+
+/**
+ * Make what was drawn into the drawing buffer visible - the one command a
+ * client that draws into GET_FRAMEBUFFER needs, whatever the buffer count:
+ *
+ *  - double buffered: the drawing buffer is shown from the next frame on (the
+ *    call returns once it is), then `area` is copied from it into the other
+ *    buffer, which becomes the drawing buffer - so a client that redraws only
+ *    what changed finds the new drawing buffer as the screen is. Ask
+ *    GET_FRAMEBUFFER again afterwards: it is another buffer now. Nothing is
+ *    ever drawn into a buffer while it is shown - no tearing, no half-drawn
+ *    frames;
+ *  - single buffered: the drawing in `area` is made visible (the data cache
+ *    written back where the core has one).
+ *
+ * `area` is what was drawn since the last PRESENT, clipped to the screen; NULL
+ * is the whole screen. Drivers without this command answer -ENOTTY - a client
+ * then flushes the node instead.
+ *
+ * arg: const dmdrvi_gfx_rect_t* - input, or NULL
+ */
+#define DMDRVI_IOCTL_GFX_PRESENT              0x309
 
 /*
  * Input commands - for any device a user touches, moves or presses (touch
