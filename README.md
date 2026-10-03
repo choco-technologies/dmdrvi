@@ -182,6 +182,13 @@ GUI library or a test tool only needs the device path, whatever the driver:
 
 See [docs/dmdrvi.md](docs/dmdrvi.md#input-ioctl-commands) for the state rules, the recommended ini keys and an example.
 
+## Device File System Ioctl Commands
+
+`DMDRVI_IOCTL_DEVFS_GET_FRIEND` (0xF00 range, answered by dmdevfs, never by
+the driver) returns the members of a node's `friends_group` to any module -
+e.g. a display service finding the touch panel of its display. See
+[docs/dmdrvi.md](docs/dmdrvi.md#device-file-system-ioctl-commands).
+
 ## Monitor Ioctl Commands
 
 Drivers whose devices need work done over time (card insertion/removal, USB port changes, media or link polling) implement three class-independent commands instead of creating threads. A monitor service calls them:

@@ -309,6 +309,25 @@ names, so every board file looks the same:
 | `interrupt_handler` | dmhaman handler of the device's interrupt pin (empty = poll) |
 | `poll_interval_ms` | Polling period of `WAIT_EVENT` without an interrupt |
 
+### Device File System Ioctl Commands
+
+Commands in the 0xF00 range are answered by the file system that exposes
+the node (dmdevfs) and never reach the driver. They give every module - not
+only drivers, which get `dmdrvi_friend_changed()` - access to what the file
+system knows about a node.
+
+| Command | `arg` type | Meaning |
+|---------|------------|---------|
+| `DMDRVI_IOCTL_DEVFS_GET_FRIEND` | `dmdrvi_devfs_friend_t*` | The `index`-th other member of the node's `friends_group`: its absolute `path` and `role`; `-ENOENT` when there is none |
+
+```c
+dmdrvi_devfs_friend_t f = { .index = 0 };
+while (Dmod_Ioctl(display, DMDRVI_IOCTL_DEVFS_GET_FRIEND, &f) == 0) {
+    /* f.path, f.role */
+    f.index++;
+}
+```
+
 ### Monitor Ioctl Commands
 
 Some devices need work done over time: an SD card is inserted or pulled, a

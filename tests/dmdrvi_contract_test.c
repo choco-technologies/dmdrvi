@@ -32,6 +32,9 @@ _Static_assert(DMDRVI_IOCTL_GFX_GET_INFO >= 0x300 &&
 _Static_assert(DMDRVI_IOCTL_INPUT_GET_INFO >= 0x400 &&
                DMDRVI_IOCTL_INPUT_WAIT_EVENT < DMDRVI_IOCTL_CUSTOM_BASE,
                "input commands must stay in their own standard range");
+_Static_assert(DMDRVI_IOCTL_DEVFS_GET_FRIEND >= 0xF00 &&
+               DMDRVI_IOCTL_DEVFS_GET_FRIEND < DMDRVI_IOCTL_CUSTOM_BASE,
+               "device file system commands must stay in their own standard range");
 _Static_assert(sizeof(dmdrvi_input_contact_t) == 8,
                "input contacts must have no padding");
 _Static_assert(sizeof(dmdrvi_input_state_t) == 12 + 8 * DMDRVI_INPUT_MAX_CONTACTS,
@@ -106,6 +109,7 @@ DMOD_TEST_STEP(dmdrvi_monitor_commands_are_distinct)
         DMDRVI_IOCTL_MONITOR_GET_POLICY, DMDRVI_IOCTL_MONITOR_EVENT, DMDRVI_IOCTL_MONITOR_REFRESH,
         DMDRVI_IOCTL_GFX_GET_INFO, DMDRVI_IOCTL_GFX_GET_BACKLIGHT,
         DMDRVI_IOCTL_INPUT_GET_INFO, DMDRVI_IOCTL_INPUT_GET_STATE, DMDRVI_IOCTL_INPUT_WAIT_EVENT,
+        DMDRVI_IOCTL_DEVFS_GET_FRIEND,
     };
     const int count = (int)(sizeof(commands) / sizeof(commands[0]));
     int duplicates = 0;
