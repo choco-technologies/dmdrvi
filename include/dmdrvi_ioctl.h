@@ -445,27 +445,31 @@ static inline bool dmdrvi_input_state_equal(const dmdrvi_input_state_t* a, const
  * file system knows about a node.
  */
 
-/** Longest absolute node path in dmdrvi_devfs_friend_t, including the terminator. */
-#define DMDRVI_DEVFS_FRIEND_PATH_MAX         96u
-
-/** Longest friend_role in dmdrvi_devfs_friend_t, including the terminator. */
-#define DMDRVI_DEVFS_FRIEND_ROLE_MAX         32u
-
-/** Another member of a node's friends_group. */
+/**
+ * Another member of a node's friends_group. The caller provides the buffers:
+ * the lengths are always filled in, so a call with NULL buffers (or too small
+ * ones, -ERANGE) tells how much to allocate.
+ */
 typedef struct
 {
-    uint32_t index;                                 /**< In: which member, from 0 */
-    char     path[DMDRVI_DEVFS_FRIEND_PATH_MAX];    /**< Out: absolute path of its node, e.g. "/dev/touch" */
-    char     role[DMDRVI_DEVFS_FRIEND_ROLE_MAX];    /**< Out: its friend_role, "" when it has none */
+    uint32_t index;         /**< In: which member, from 0 */
+    char*    path;          /**< In: buffer for the absolute path of its node, e.g. "/dev/touch" (may be NULL) */
+    size_t   path_size;     /**< In: size of path in bytes */
+    char*    role;          /**< In: buffer for its friend_role, "" when it has none (may be NULL) */
+    size_t   role_size;     /**< In: size of role in bytes */
+    size_t   path_length;   /**< Out: length of the path, without the terminator */
+    size_t   role_length;   /**< Out: length of the role, without the terminator */
 } dmdrvi_devfs_friend_t;
 
 /**
  * Get the index-th other member of the node's friends_group - e.g. a display
  * service looking for the touch panel of its display. Members are numbered
  * in configuration order; members whose node has no path yet are skipped.
- * -ENOENT when there is no such member (or the node has no group).
+ * -ENOENT when there is no such member (or the node has no group), -ERANGE
+ * when a buffer is too small (path_length / role_length are still filled in,
+ * nothing is copied).
  *
- * arg: dmdrvi_devfs_friend_t* - index in, path and role out
+ * arg: dmdrvi_devfs_friend_t* - index and buffers in, strings and lengths out
  */
 #define DMDRVI_IOCTL_DEVFS_GET_FRIEND        0xF00
 
