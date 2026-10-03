@@ -205,6 +205,110 @@ stride, buffer count). The others are `GET_FRAMEBUFFER`, `SWAP_BUFFERS`,
 accesses the drawing buffer at the given byte offset. Commands a driver cannot
 honour return `-ENOTSUP`; driver-specific ones use `DMDRVI_IOCTL_CUSTOM_BASE`.
 
+### Input Ioctl Commands
+
+Any device a user touches, moves or presses - a touch panel, a mouse, a set
+of buttons - implements the standard `DMDRVI_IOCTL_INPUT_*` commands (0x400
+range). Generic code (a GUI library's input driver, a test tool) needs only
+the path of the node; a new touch controller or a mouse driver is used the
+same way without changing it.
+
+| Command | `arg` type | Meaning |
+|---------|------------|---------|
+| `DMDRVI_IOCTL_INPUT_GET_INFO` | `dmdrvi_input_info_t*` | What the device reports |
+| `DMDRVI_IOCTL_INPUT_GET_STATE` | `dmdrvi_input_state_t*` | Current state - the same as `read()` |
+| `DMDRVI_IOCTL_INPUT_WAIT_EVENT` | `const uint32_t*` timeout in ms, `NULL` = forever | Block until the state changes |
+
+`read()` of an input node returns one `dmdrvi_input_state_t` (the buffer must
+be at least that large, otherwise `-EINVAL`; the offset is ignored). Driver
+specific extras (chip registers, calibration) use commands from
+`DMDRVI_IOCTL_CUSTOM_BASE` on; standard commands a driver cannot honour
+return `-ENOTSUP`, unknown ones `-ENOTTY`.
+
+#### Info
+
+`dmdrvi_input_info_t` holds the device model (`name`, e.g. `"FT5336"`), its
+kind (`DMDRVI_INPUT_TYPE_TOUCHSCREEN`, `_MOUSE`, `_BUTTONS`), the
+`DMDRVI_INPUT_CAP_*` bits, the coordinate range of contacts (`width` x
+`height`, 0 = unknown), `max_contacts` and `button_count`.
+
+| Capability | The device |
+|------------|------------|
+| `DMDRVI_INPUT_CAP_CONTACTS` | Reports contacts with screen coordinates |
+| `DMDRVI_INPUT_CAP_MOTION` | Reports relative motion (`dx`, `dy`) |
+| `DMDRVI_INPUT_CAP_WHEEL` | Reports a scroll wheel |
+| `DMDRVI_INPUT_CAP_BUTTONS` | Reports buttons |
+| `DMDRVI_INPUT_CAP_PRESSURE` | Fills `pressure` of contacts |
+| `DMDRVI_INPUT_CAP_CONTACT_SIZE` | Fills `size` of contacts |
+| `DMDRVI_INPUT_CAP_INTERRUPT` | Wakes `WAIT_EVENT` from an interrupt (otherwise it polls) |
+
+#### State
+
+```c
+typedef struct {
+    uint16_t x, y;      /* screen coordinates */
+    uint8_t  id;        /* stays the same while the contact moves */
+    uint8_t  event;     /* DMDRVI_INPUT_CONTACT_DOWN / _MOVE / _UP */
+    uint8_t  pressure;  /* 0 without DMDRVI_INPUT_CAP_PRESSURE */
+    uint8_t  size;      /* 0 without DMDRVI_INPUT_CAP_CONTACT_SIZE */
+} dmdrvi_input_contact_t;
+
+typedef struct {
+    uint32_t buttons;               /* DMDRVI_INPUT_BUTTON_* bits - bit n is button n */
+    int16_t  dx, dy, wheel;         /* relative, since the previous state handed out */
+    uint8_t  contact_count;         /* 0 = nothing touches */
+    uint8_t  reserved;
+    dmdrvi_input_contact_t contacts[DMDRVI_INPUT_MAX_CONTACTS];
+} dmdrvi_input_state_t;
+```
+
+* Coordinates are screen coordinates: the driver applies its configured axis
+  swap, mirroring and clipping. `x < width` and `y < height` when the range
+  is known.
+* A contact is reported `DOWN` when it touches, `MOVE` while it stays down
+  and may be reported once `UP` when it is lifted; after that it is gone.
+  A device that does not see the lift simply stops reporting the contact.
+* `dx`, `dy` and `wheel` add up from one handed-out state to the next:
+  `read()` / `GET_STATE` return the sum and reset it.
+* Everything the device does not report, the contacts beyond
+  `contact_count` and `reserved` are zero, so two states compare byte by
+  byte - `dmdrvi_input_state_equal()` (inline, `dmdrvi_ioctl.h`) does that
+  without libc.
+
+#### Waiting for events
+
+`WAIT_EVENT` returns 0 as soon as the state differs from the one handed out
+last, or the device signalled an event - whichever the driver can tell. A
+change that happens between two waits is not lost: the next wait returns at
+once. The caller reads the state afterwards; it may equal the previous one
+(the event changed nothing the state shows), so the caller compares:
+
+```c
+dmdrvi_input_state_t last = { 0 }, now;
+uint32_t timeout = 1000;
+
+while (ioctl(node, DMDRVI_IOCTL_INPUT_WAIT_EVENT, &timeout) != -ETIMEDOUT) {
+    read(node, &now, sizeof(now));
+    if (!dmdrvi_input_state_equal(&now, &last)) {
+        handle(&now);
+        last = now;
+    }
+}
+```
+
+#### Configuration keys
+
+Drivers should read the common settings from their ini section under these
+names, so every board file looks the same:
+
+| Key | Meaning |
+|-----|---------|
+| `width`, `height` | Screen size - range and clipping of the reported coordinates |
+| `swap_xy` | `on`: the device's X is the screen's Y and vice versa |
+| `invert_x`, `invert_y` | `on`: mirror the axis (applied after `swap_xy`) |
+| `interrupt_handler` | dmhaman handler of the device's interrupt pin (empty = poll) |
+| `poll_interval_ms` | Polling period of `WAIT_EVENT` without an interrupt |
+
 ### Monitor Ioctl Commands
 
 Some devices need work done over time: an SD card is inserted or pulled, a
