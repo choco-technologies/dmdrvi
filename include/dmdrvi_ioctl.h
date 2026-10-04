@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include "dmdrvi_types.h"
 
 #ifdef __cplusplus
