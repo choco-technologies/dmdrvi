@@ -471,6 +471,67 @@ static inline bool dmdrvi_input_state_equal(const dmdrvi_input_state_t* a, const
 #define DMDRVI_IOCTL_INPUT_WAIT_EVENT         0x402
 
 /*
+ * Audio codec controls (0x500 range). PCM samples are transferred through a
+ * separate stream node; these commands manage the codec's control plane.
+ */
+
+/** @brief Analog output selected for audio playback. */
+typedef enum
+{
+    DMDRVI_AUDIO_OUTPUT_HEADPHONE = 0,
+    DMDRVI_AUDIO_OUTPUT_SPEAKER = 1,
+    DMDRVI_AUDIO_OUTPUT_LINE = 2,
+} dmdrvi_audio_output_t;
+
+/** @brief Requested PCM format and analog output state. */
+typedef struct
+{
+    uint32_t sample_rate_hz;         /**< PCM frames per second. */
+    uint8_t channels;                /**< Interleaved PCM channel count. */
+    uint8_t sample_bits;             /**< Significant bits per PCM sample. */
+    dmdrvi_audio_output_t output;    /**< Selected analog output. */
+    uint8_t volume_percent;          /**< Output gain on a 0..100 scale. */
+    bool muted;                      /**< True to mute playback. */
+} dmdrvi_audio_config_t;
+
+/** @brief Current audio codec identity and applied state. */
+typedef struct
+{
+    uint32_t hardware_id;            /**< Device-specific chip identifier. */
+    dmdrvi_audio_config_t config;    /**< Last successfully applied settings. */
+    bool configured;                 /**< False until configuration succeeds or if lost. */
+} dmdrvi_audio_info_t;
+
+/**
+ * @brief Read the codec identity and currently applied audio settings.
+ * @param arg Output pointer to dmdrvi_audio_info_t.
+ * @return 0 on success, or a negative errno-compatible code.
+ */
+#define DMDRVI_IOCTL_AUDIO_GET_INFO           0x500
+
+/**
+ * @brief Configure the codec's PCM format and analog output.
+ * @param arg Input pointer to const dmdrvi_audio_config_t.
+ * @return 0 on success, -ENOTSUP for unsupported format or output, or
+ * another negative errno-compatible code.
+ */
+#define DMDRVI_IOCTL_AUDIO_CONFIGURE          0x501
+
+/**
+ * @brief Set output gain without changing the PCM format.
+ * @param arg Input pointer to const uint8_t containing a value from 0 to 100.
+ * @return 0 on success, or a negative errno-compatible code.
+ */
+#define DMDRVI_IOCTL_AUDIO_SET_VOLUME         0x502
+
+/**
+ * @brief Mute or unmute audio playback.
+ * @param arg Input pointer to const bool.
+ * @return 0 on success, or a negative errno-compatible code.
+ */
+#define DMDRVI_IOCTL_AUDIO_SET_MUTE           0x503
+
+/*
  * Device file system commands (0xF00 range) - answered by the file system
  * that exposes the node (dmdevfs), never passed to the driver. They give
  * everybody, not only drivers (dmdrvi_friend_changed()), access to what the
@@ -515,7 +576,7 @@ typedef struct
  * commands relative to whichever one happens to be last today would silently
  * collide with a new standard command added later. Standard categories are
  * spaced 0x100 apart (network 0x01, block 0x100, monitor 0x200, graphics
- * 0x300, input 0x400; 0xF00 is reserved for the device file system), which
+ * 0x300, input 0x400, audio 0x500; 0xF00 is reserved for the device file system), which
  * leaves generous headroom before reaching this base.
  */
 #define DMDRVI_IOCTL_CUSTOM_BASE              0x1000
