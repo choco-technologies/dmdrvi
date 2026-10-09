@@ -230,6 +230,28 @@ specific extras (chip registers, calibration) use commands from
 `DMDRVI_IOCTL_CUSTOM_BASE` on; standard commands a driver cannot honour
 return `-ENOTSUP`, unknown ones `-ENOTTY`.
 
+### Audio Codec Ioctl Commands
+
+Audio codec nodes implement the standard `DMDRVI_IOCTL_AUDIO_*` commands
+(0x500 range). These commands control the codec; PCM read/write belongs to a
+separate stream node. A client supplies the codec device path, without knowing
+which chip is connected.
+
+| Command | `arg` type | Meaning |
+|---------|------------|---------|
+| `DMDRVI_IOCTL_AUDIO_GET_INFO` | `dmdrvi_audio_info_t*` | Read hardware ID and last applied configuration |
+| `DMDRVI_IOCTL_AUDIO_CONFIGURE` | `const dmdrvi_audio_config_t*` | Set PCM rate, channels, sample width, output, volume and mute |
+| `DMDRVI_IOCTL_AUDIO_SET_VOLUME` | `const uint8_t*` | Set output volume from 0 to 100 percent |
+| `DMDRVI_IOCTL_AUDIO_SET_MUTE` | `const bool*` | Set playback mute |
+
+`dmdrvi_audio_info_t.configured` is false until configuration succeeds and
+after a driver detects that the codec lost its settings. Unsupported rates,
+formats or outputs return `-ENOTSUP`; unsupported standard commands also
+return `-ENOTSUP`. The hardware ID is device-specific; generic clients need
+not inspect it. The output choice is one of headphone, speaker or line. A
+driver may support only a subset. Volume is a normalized percentage, so each
+codec driver maps it to its own gain register.
+
 #### Info
 
 `dmdrvi_input_info_t` holds the device model (`name`, e.g. `"FT5336"`), its

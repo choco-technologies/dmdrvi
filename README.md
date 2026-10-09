@@ -20,6 +20,7 @@ dmdrvi is a driver interface module designed for embedded systems using the DMOD
 - **Friends Groups**: Group related driver configurations and let drivers discover one another's device paths
 - **Dynamic Device Notifications**: Drivers can inform dmdevfs when a device becomes available or unavailable at runtime within an existing context
 - **Network Driver Ioctls**: Built-in ioctl commands for MAC address configuration, link status, and interface start/stop (see `dmdrvi_ioctl.h`)
+- **Audio Codec Ioctls**: Common commands for identity, format and output configuration, volume, and mute (see `dmdrvi_ioctl.h`)
 - **SAL-Compatible**: Uses only DMOD SAL functions
 - **Lightweight**: Minimal memory footprint suitable for embedded systems
 
@@ -186,6 +187,15 @@ GUI library or a test tool only needs the device path, whatever the driver:
 - `DMDRVI_IOCTL_INPUT_WAIT_EVENT` - blocks until the state changes (`const uint32_t*` timeout in ms, `NULL` = forever), `-ETIMEDOUT` on timeout.
 
 See [docs/dmdrvi.md](docs/dmdrvi.md#input-ioctl-commands) for the state rules, the recommended ini keys and an example.
+
+## Audio Codec Ioctl Commands
+
+Audio codecs use `DMDRVI_IOCTL_AUDIO_*` (0x500 range) for their control plane.
+`GET_INFO` reports the hardware ID and applied format, `CONFIGURE` selects a
+format and output, and `SET_VOLUME` / `SET_MUTE` adjust playback without
+reconfiguring the stream. Volume is a normalized percentage from 0 to 100;
+the driver maps it to its hardware gain setting. PCM data travels through a
+separate audio stream node. See [docs/dmdrvi.md](docs/dmdrvi.md#audio-codec-ioctl-commands).
 
 ## Device File System Ioctl Commands
 

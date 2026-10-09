@@ -32,6 +32,9 @@ _Static_assert(DMDRVI_IOCTL_GFX_GET_INFO >= 0x300 &&
 _Static_assert(DMDRVI_IOCTL_INPUT_GET_INFO >= 0x400 &&
                DMDRVI_IOCTL_INPUT_WAIT_EVENT < DMDRVI_IOCTL_CUSTOM_BASE,
                "input commands must stay in their own standard range");
+_Static_assert(DMDRVI_IOCTL_AUDIO_GET_INFO >= 0x500 &&
+               DMDRVI_IOCTL_AUDIO_SET_MUTE < DMDRVI_IOCTL_CUSTOM_BASE,
+               "audio commands must stay in their own standard range");
 _Static_assert(DMDRVI_IOCTL_DEVFS_GET_FRIEND >= 0xF00 &&
                DMDRVI_IOCTL_DEVFS_GET_FRIEND < DMDRVI_IOCTL_CUSTOM_BASE,
                "device file system commands must stay in their own standard range");
@@ -112,6 +115,8 @@ DMOD_TEST_STEP(dmdrvi_monitor_commands_are_distinct)
         DMDRVI_IOCTL_GFX_GET_DISPLAY_ENABLED, DMDRVI_IOCTL_GFX_SET_BACKLIGHT, DMDRVI_IOCTL_GFX_GET_BACKLIGHT,
         DMDRVI_IOCTL_GFX_PRESENT,
         DMDRVI_IOCTL_INPUT_GET_INFO, DMDRVI_IOCTL_INPUT_GET_STATE, DMDRVI_IOCTL_INPUT_WAIT_EVENT,
+        DMDRVI_IOCTL_AUDIO_GET_INFO, DMDRVI_IOCTL_AUDIO_CONFIGURE,
+        DMDRVI_IOCTL_AUDIO_SET_VOLUME, DMDRVI_IOCTL_AUDIO_SET_MUTE,
         DMDRVI_IOCTL_DEVFS_GET_FRIEND,
     };
     const int count = (int)(sizeof(commands) / sizeof(commands[0]));
