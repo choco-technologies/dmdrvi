@@ -471,8 +471,9 @@ static inline bool dmdrvi_input_state_equal(const dmdrvi_input_state_t* a, const
 #define DMDRVI_IOCTL_INPUT_WAIT_EVENT         0x402
 
 /*
- * Audio codec controls (0x500 range). PCM samples are transferred through a
- * separate stream node; these commands manage the codec's control plane.
+ * Audio (0x500 range). 0x500..0x503 are the analog controls of a codec:
+ * identity, format and output, volume, mute. The stream commands below
+ * (0x504..) are shared by codecs and bare serial audio interfaces.
  */
 
 /** @brief Analog output selected for audio playback. */
@@ -510,7 +511,13 @@ typedef struct
 #define DMDRVI_IOCTL_AUDIO_GET_INFO           0x500
 
 /**
- * @brief Configure the codec's PCM format and analog output.
+ * @brief Configure the PCM format and analog output.
+ *
+ * A codec may start its stream here, since it needs the link clocks to
+ * configure itself; AUDIO_START then succeeds without doing more. A bare
+ * serial interface has a fixed format: it returns 0 when rate, channels and
+ * sample width match it (output, volume and mute do not apply) and -ENOTSUP
+ * otherwise.
  * @param arg Input pointer to const dmdrvi_audio_config_t.
  * @return 0 on success, -ENOTSUP for unsupported format or output, or
  * another negative errno-compatible code.
@@ -530,6 +537,130 @@ typedef struct
  * @return 0 on success, or a negative errno-compatible code.
  */
 #define DMDRVI_IOCTL_AUDIO_SET_MUTE           0x503
+
+/*
+ * Audio stream (0x504..0x50A) - implemented by every audio node that carries
+ * samples through read/write: a codec node (in channels, e.g. stereo) as
+ * well as a bare serial audio interface - SAI, I2S, TDM - (in wire slots).
+ * An application plays or records the same way on both:
+ *
+ *   AUDIO_CONFIGURE (optional) -> AUDIO_START -> write/read ... ->
+ *   AUDIO_DRAIN -> AUDIO_STOP
+ *
+ * AUDIO_GET_STREAM tells it the buffer layout. A serial interface has no
+ * analog controls: it answers AUDIO_CONFIGURE only when the request matches
+ * its fixed (ini) format, and AUDIO_GET_INFO / SET_VOLUME / SET_MUTE with
+ * -ENOTSUP.
+ */
+
+/** @brief Representation of one sample in read/write buffers. */
+typedef enum
+{
+    DMDRVI_AUDIO_FORMAT_S16_LE      = 0,  /**< Signed 16-bit little-endian, 2 bytes. */
+    DMDRVI_AUDIO_FORMAT_S24_IN32_LE = 1,  /**< Signed 24-bit in the low bits of a 32-bit LE word. */
+    DMDRVI_AUDIO_FORMAT_S32_LE      = 2,  /**< Signed 32-bit little-endian, 4 bytes. */
+} dmdrvi_audio_format_t;
+
+/** @brief Serial framing of the audio link. */
+typedef enum
+{
+    DMDRVI_AUDIO_FRAMING_NONE = 0,  /**< No serial link known (e.g. a codec before it is configured). */
+    DMDRVI_AUDIO_FRAMING_I2S  = 1,  /**< Standard two-slot I2S framing. */
+    DMDRVI_AUDIO_FRAMING_TDM  = 2,  /**< Time-division multiplexed slots. */
+} dmdrvi_audio_framing_t;
+
+/** @brief Source of the serial bit and frame clocks. */
+typedef enum
+{
+    DMDRVI_AUDIO_CLOCK_MASTER = 0,  /**< The node generates both clocks. */
+    DMDRVI_AUDIO_CLOCK_SLAVE  = 1,  /**< The node receives both clocks. */
+} dmdrvi_audio_clock_role_t;
+
+/**
+ * @brief Layout of a node's read/write buffers and of its serial link.
+ *
+ * One frame in the buffers is `channels` interleaved samples of `format`.
+ * On a serial interface the channels are its active slots in ascending
+ * order (channels == popcount(active_slots)); a codec reports the link it
+ * drives in the slot fields, while its buffers carry `channels` (e.g. 2).
+ */
+typedef struct
+{
+    uint32_t sample_rate_hz;            /**< Frames per second. */
+    dmdrvi_audio_format_t format;       /**< Sample representation in read/write buffers. */
+    uint8_t channels;                   /**< Samples per frame in read/write buffers. */
+    bool transmit;                      /**< write (playback) supported. */
+    bool receive;                       /**< read (capture) supported. */
+    dmdrvi_audio_framing_t framing;     /**< Serial link framing. */
+    dmdrvi_audio_clock_role_t clock_role; /**< Clock producer or consumer on the link. */
+    uint8_t slot_bits;                  /**< Width on the wire of each time slot. */
+    uint8_t slot_count;                 /**< Number of slots in each link frame. */
+    uint16_t frame_bits;                /**< Link frame length including padding. */
+    uint32_t active_slots;              /**< Bit N: link slot N carries data. */
+} dmdrvi_audio_stream_t;
+
+/** @brief Transfer state and cumulative error counters of an audio stream. */
+typedef struct
+{
+    uint32_t actual_sample_rate_hz;     /**< Frame rate achieved by the hardware. */
+    uint32_t tx_underruns;              /**< Playback starvation events. */
+    uint32_t rx_overruns;               /**< Capture frames lost. */
+    uint32_t transfer_errors;           /**< Other transfer errors. */
+    bool running;                       /**< True between START and STOP. */
+} dmdrvi_audio_status_t;
+
+/**
+ * @brief Read the buffer layout and serial link of the stream; allowed
+ * before START.
+ * @param arg Output pointer to dmdrvi_audio_stream_t.
+ * @return 0 on success, or a negative errno-compatible code.
+ */
+#define DMDRVI_IOCTL_AUDIO_GET_STREAM         0x504
+
+/**
+ * @brief Start the stream with the current configuration.
+ * @param arg NULL.
+ * @return 0, also when already running; -EPIPE when the node needs
+ * AUDIO_CONFIGURE first, or another negative errno-compatible code.
+ */
+#define DMDRVI_IOCTL_AUDIO_START              0x505
+
+/**
+ * @brief Stop the stream and wake pending reads, writes and drains.
+ * @param arg NULL.
+ * @return 0, also when already stopped.
+ */
+#define DMDRVI_IOCTL_AUDIO_STOP               0x506
+
+/**
+ * @brief Read the transfer state and error counters.
+ * @param arg Output pointer to dmdrvi_audio_status_t.
+ * @return 0 on success, -EPIPE when the node has no stream to report, or
+ * another negative errno-compatible code.
+ */
+#define DMDRVI_IOCTL_AUDIO_GET_STATUS         0x507
+
+/**
+ * @brief Set the read/write/drain wait limit of this open handle.
+ * @param arg Input pointer to const uint32_t milliseconds; zero means no limit.
+ * @return 0 on success, or a negative errno-compatible code.
+ */
+#define DMDRVI_IOCTL_AUDIO_SET_TIMEOUT        0x508
+
+/**
+ * @brief Read the wait limit of this open handle.
+ * @param arg Output pointer to uint32_t milliseconds.
+ * @return 0 on success, or a negative errno-compatible code.
+ */
+#define DMDRVI_IOCTL_AUDIO_GET_TIMEOUT        0x509
+
+/**
+ * @brief Wait until all frames accepted by write have left the node.
+ * @param arg NULL. The handle's wait limit applies; STOP cancels the wait.
+ * @return 0 on success, -EPIPE when not running, -ETIMEDOUT, -ECANCELED or
+ * another negative errno-compatible code.
+ */
+#define DMDRVI_IOCTL_AUDIO_DRAIN              0x50A
 
 /*
  * Device file system commands (0xF00 range) - answered by the file system
