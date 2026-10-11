@@ -252,6 +252,28 @@ not inspect it. The output choice is one of headphone, speaker or line. A
 driver may support only a subset. Volume is a normalized percentage, so each
 codec driver maps it to its own gain register.
 
+### PCM Stream Ioctl Commands
+
+Serial audio interface nodes (SAI, I2S, TDM) implement the standard
+`DMDRVI_IOCTL_PCM_*` commands (0x600 range). PCM samples are read and written
+through the node in whole frames: the active slots (`active_slots`, ascending)
+interleaved, each sample in `format`. A request size must be a multiple of
+the frame size; a transfer may return fewer whole frames.
+
+| Command | `arg` type | Meaning |
+|---------|------------|---------|
+| `DMDRVI_IOCTL_PCM_GET_CONFIG` | `dmdrvi_pcm_config_t*` | Read rate, sample format, framing, clock role, slots and directions |
+| `DMDRVI_IOCTL_PCM_START` | `NULL` | Start the configured directions; `-EBUSY` when running |
+| `DMDRVI_IOCTL_PCM_STOP` | `NULL` | Stop and wake pending I/O; succeeds when idle |
+| `DMDRVI_IOCTL_PCM_GET_STATUS` | `dmdrvi_pcm_status_t*` | Achieved rate, running flag, underrun/overrun/error counters |
+| `DMDRVI_IOCTL_PCM_SET_TIMEOUT` | `const uint32_t*` | Wait limit of this handle in ms; 0 means no limit |
+| `DMDRVI_IOCTL_PCM_GET_TIMEOUT` | `uint32_t*` | Read the handle's wait limit |
+| `DMDRVI_IOCTL_PCM_DRAIN` | `NULL` | Wait until written frames left the interface; `-EPIPE` when stopped |
+
+The configuration comes from the node's ini section; these commands do not
+change it. A codec driver (`DMDRVI_IOCTL_AUDIO_*`) typically opens its PCM
+friend, checks `GET_CONFIG` against the codec's interface format and starts it.
+
 #### Info
 
 `dmdrvi_input_info_t` holds the device model (`name`, e.g. `"FT5336"`), its

@@ -532,6 +532,112 @@ typedef struct
 #define DMDRVI_IOCTL_AUDIO_SET_MUTE           0x503
 
 /*
+ * PCM stream commands (0x600 range) - serial audio interfaces (SAI, I2S,
+ * TDM) that move PCM frames between memory and a codec. Samples travel
+ * through ordinary read/write on the node, in whole frames of interleaved
+ * active slots; these commands describe and control the stream. A codec node
+ * (DMDRVI_IOCTL_AUDIO_*) usually drives such a node as its friend.
+ */
+
+/** @brief Source of the serial bit and frame clocks. */
+typedef enum
+{
+    DMDRVI_PCM_CLOCK_MASTER = 0,    /**< The interface generates both clocks. */
+    DMDRVI_PCM_CLOCK_SLAVE  = 1,    /**< The interface receives both clocks. */
+} dmdrvi_pcm_clock_role_t;
+
+/** @brief Serial framing of one PCM frame. */
+typedef enum
+{
+    DMDRVI_PCM_FRAMING_I2S = 0,     /**< Standard two-slot I2S framing. */
+    DMDRVI_PCM_FRAMING_TDM = 1,     /**< Time-division multiplexed slots. */
+} dmdrvi_pcm_framing_t;
+
+/** @brief Representation of one sample in read/write buffers. */
+typedef enum
+{
+    DMDRVI_PCM_FORMAT_S16_LE      = 0,  /**< Signed 16-bit little-endian, 2 bytes. */
+    DMDRVI_PCM_FORMAT_S24_IN32_LE = 1,  /**< Signed 24-bit in the low bits of a 32-bit LE word. */
+    DMDRVI_PCM_FORMAT_S32_LE      = 2,  /**< Signed 32-bit little-endian, 4 bytes. */
+} dmdrvi_pcm_format_t;
+
+/** @brief Effective configuration of a PCM stream node. */
+typedef struct
+{
+    uint32_t sample_rate_hz;            /**< Requested frame rate in Hz. */
+    dmdrvi_pcm_format_t format;         /**< Sample representation in read/write buffers. */
+    dmdrvi_pcm_framing_t framing;       /**< I2S or TDM framing. */
+    dmdrvi_pcm_clock_role_t clock_role; /**< Clock producer or consumer. */
+    uint8_t slot_bits;                  /**< Width on the wire of each time slot. */
+    uint8_t slot_count;                 /**< Number of slots in each frame. */
+    uint16_t frame_bits;                /**< Total frame length on the wire, including padding. */
+    uint32_t active_slots;              /**< Bit N selects time slot N; read/write carry these slots in ascending order. */
+    bool transmit;                      /**< Write (TX) direction enabled. */
+    bool receive;                       /**< Read (RX) direction enabled. */
+} dmdrvi_pcm_config_t;
+
+/** @brief Transfer state and cumulative error counters of a PCM stream node. */
+typedef struct
+{
+    uint32_t actual_sample_rate_hz;     /**< Frame rate achieved by the hardware. */
+    uint32_t tx_underruns;              /**< Transmit starvation events. */
+    uint32_t rx_overruns;               /**< Receive frames lost. */
+    uint32_t transfer_errors;           /**< Other transfer errors. */
+    bool running;                       /**< True between START and STOP. */
+} dmdrvi_pcm_status_t;
+
+/**
+ * @brief Read the effective stream configuration; allowed before START.
+ * @param arg Output pointer to dmdrvi_pcm_config_t.
+ * @return 0 on success, or a negative errno-compatible code.
+ */
+#define DMDRVI_IOCTL_PCM_GET_CONFIG           0x600
+
+/**
+ * @brief Start transferring the configured directions.
+ * @param arg NULL.
+ * @return 0 on success, -EBUSY when already running, or another negative
+ * errno-compatible code.
+ */
+#define DMDRVI_IOCTL_PCM_START                0x601
+
+/**
+ * @brief Stop the transfer and wake pending reads, writes and drains.
+ * @param arg NULL.
+ * @return 0, also when the stream is already stopped.
+ */
+#define DMDRVI_IOCTL_PCM_STOP                 0x602
+
+/**
+ * @brief Read the transfer state and error counters.
+ * @param arg Output pointer to dmdrvi_pcm_status_t.
+ * @return 0 on success, or a negative errno-compatible code.
+ */
+#define DMDRVI_IOCTL_PCM_GET_STATUS           0x603
+
+/**
+ * @brief Set the read/write/drain wait limit of this open handle.
+ * @param arg Input pointer to const uint32_t milliseconds; zero means no limit.
+ * @return 0 on success, or a negative errno-compatible code.
+ */
+#define DMDRVI_IOCTL_PCM_SET_TIMEOUT          0x604
+
+/**
+ * @brief Read the wait limit of this open handle.
+ * @param arg Output pointer to uint32_t milliseconds.
+ * @return 0 on success, or a negative errno-compatible code.
+ */
+#define DMDRVI_IOCTL_PCM_GET_TIMEOUT          0x605
+
+/**
+ * @brief Wait until all frames accepted by write have left the interface.
+ * @param arg NULL. The handle's wait limit applies; STOP cancels the wait.
+ * @return 0 on success, -EPIPE when not running, -ETIMEDOUT, -ECANCELED or
+ * another negative errno-compatible code.
+ */
+#define DMDRVI_IOCTL_PCM_DRAIN                0x606
+
+/*
  * Device file system commands (0xF00 range) - answered by the file system
  * that exposes the node (dmdevfs), never passed to the driver. They give
  * everybody, not only drivers (dmdrvi_friend_changed()), access to what the
@@ -576,7 +682,7 @@ typedef struct
  * commands relative to whichever one happens to be last today would silently
  * collide with a new standard command added later. Standard categories are
  * spaced 0x100 apart (network 0x01, block 0x100, monitor 0x200, graphics
- * 0x300, input 0x400, audio 0x500; 0xF00 is reserved for the device file system), which
+ * 0x300, input 0x400, audio 0x500, PCM stream 0x600; 0xF00 is reserved for the device file system), which
  * leaves generous headroom before reaching this base.
  */
 #define DMDRVI_IOCTL_CUSTOM_BASE              0x1000

@@ -21,6 +21,7 @@ dmdrvi is a driver interface module designed for embedded systems using the DMOD
 - **Dynamic Device Notifications**: Drivers can inform dmdevfs when a device becomes available or unavailable at runtime within an existing context
 - **Network Driver Ioctls**: Built-in ioctl commands for MAC address configuration, link status, and interface start/stop (see `dmdrvi_ioctl.h`)
 - **Audio Codec Ioctls**: Common commands for identity, format and output configuration, volume, and mute (see `dmdrvi_ioctl.h`)
+- **PCM Stream Ioctls**: Common commands for serial audio interfaces (SAI, I2S, TDM): stream format, start/stop, status, I/O timeout and drain (see `dmdrvi_ioctl.h`)
 - **SAL-Compatible**: Uses only DMOD SAL functions
 - **Lightweight**: Minimal memory footprint suitable for embedded systems
 
@@ -196,6 +197,17 @@ format and output, and `SET_VOLUME` / `SET_MUTE` adjust playback without
 reconfiguring the stream. Volume is a normalized percentage from 0 to 100;
 the driver maps it to its hardware gain setting. PCM data travels through a
 separate audio stream node. See [docs/dmdrvi.md](docs/dmdrvi.md#audio-codec-ioctl-commands).
+
+## PCM Stream Ioctl Commands
+
+Serial audio interfaces (SAI, I2S, TDM controllers) use `DMDRVI_IOCTL_PCM_*`
+(0x600 range). PCM frames travel through ordinary `read`/`write` on the node;
+`GET_CONFIG` describes them (rate, sample format, framing, slots, directions),
+`START` / `STOP` run the transfer, `GET_STATUS` reports the achieved rate and
+underrun/overrun counters, `SET_TIMEOUT` / `GET_TIMEOUT` bound the waits of the
+open handle and `DRAIN` waits until written frames have left the interface. A
+codec driver drives such a node through these commands without knowing the
+controller. See [docs/dmdrvi.md](docs/dmdrvi.md#pcm-stream-ioctl-commands).
 
 ## Device File System Ioctl Commands
 
