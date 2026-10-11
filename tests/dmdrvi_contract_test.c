@@ -33,11 +33,8 @@ _Static_assert(DMDRVI_IOCTL_INPUT_GET_INFO >= 0x400 &&
                DMDRVI_IOCTL_INPUT_WAIT_EVENT < DMDRVI_IOCTL_CUSTOM_BASE,
                "input commands must stay in their own standard range");
 _Static_assert(DMDRVI_IOCTL_AUDIO_GET_INFO >= 0x500 &&
-               DMDRVI_IOCTL_AUDIO_SET_MUTE < DMDRVI_IOCTL_CUSTOM_BASE,
+               DMDRVI_IOCTL_AUDIO_DRAIN < 0x600,
                "audio commands must stay in their own standard range");
-_Static_assert(DMDRVI_IOCTL_PCM_GET_CONFIG >= 0x600 &&
-               DMDRVI_IOCTL_PCM_DRAIN < 0x700,
-               "PCM stream commands must stay in their own standard range");
 _Static_assert(DMDRVI_IOCTL_DEVFS_GET_FRIEND >= 0xF00 &&
                DMDRVI_IOCTL_DEVFS_GET_FRIEND < DMDRVI_IOCTL_CUSTOM_BASE,
                "device file system commands must stay in their own standard range");
@@ -120,9 +117,9 @@ DMOD_TEST_STEP(dmdrvi_monitor_commands_are_distinct)
         DMDRVI_IOCTL_INPUT_GET_INFO, DMDRVI_IOCTL_INPUT_GET_STATE, DMDRVI_IOCTL_INPUT_WAIT_EVENT,
         DMDRVI_IOCTL_AUDIO_GET_INFO, DMDRVI_IOCTL_AUDIO_CONFIGURE,
         DMDRVI_IOCTL_AUDIO_SET_VOLUME, DMDRVI_IOCTL_AUDIO_SET_MUTE,
-        DMDRVI_IOCTL_PCM_GET_CONFIG, DMDRVI_IOCTL_PCM_START, DMDRVI_IOCTL_PCM_STOP,
-        DMDRVI_IOCTL_PCM_GET_STATUS, DMDRVI_IOCTL_PCM_SET_TIMEOUT,
-        DMDRVI_IOCTL_PCM_GET_TIMEOUT, DMDRVI_IOCTL_PCM_DRAIN,
+        DMDRVI_IOCTL_AUDIO_GET_STREAM, DMDRVI_IOCTL_AUDIO_START, DMDRVI_IOCTL_AUDIO_STOP,
+        DMDRVI_IOCTL_AUDIO_GET_STATUS, DMDRVI_IOCTL_AUDIO_SET_TIMEOUT,
+        DMDRVI_IOCTL_AUDIO_GET_TIMEOUT, DMDRVI_IOCTL_AUDIO_DRAIN,
         DMDRVI_IOCTL_DEVFS_GET_FRIEND,
     };
     const int count = (int)(sizeof(commands) / sizeof(commands[0]));

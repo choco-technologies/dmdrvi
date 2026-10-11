@@ -20,8 +20,7 @@ dmdrvi is a driver interface module designed for embedded systems using the DMOD
 - **Friends Groups**: Group related driver configurations and let drivers discover one another's device paths
 - **Dynamic Device Notifications**: Drivers can inform dmdevfs when a device becomes available or unavailable at runtime within an existing context
 - **Network Driver Ioctls**: Built-in ioctl commands for MAC address configuration, link status, and interface start/stop (see `dmdrvi_ioctl.h`)
-- **Audio Codec Ioctls**: Common commands for identity, format and output configuration, volume, and mute (see `dmdrvi_ioctl.h`)
-- **PCM Stream Ioctls**: Common commands for serial audio interfaces (SAI, I2S, TDM): stream format, start/stop, status, I/O timeout and drain (see `dmdrvi_ioctl.h`)
+- **Audio Ioctls**: Codec controls (identity, format and output, volume, mute) and one stream contract (layout, start/stop, status, I/O timeout, drain) shared by codecs and bare serial audio interfaces (see `dmdrvi_ioctl.h`)
 - **SAL-Compatible**: Uses only DMOD SAL functions
 - **Lightweight**: Minimal memory footprint suitable for embedded systems
 
@@ -189,25 +188,21 @@ GUI library or a test tool only needs the device path, whatever the driver:
 
 See [docs/dmdrvi.md](docs/dmdrvi.md#input-ioctl-commands) for the state rules, the recommended ini keys and an example.
 
-## Audio Codec Ioctl Commands
+## Audio Ioctl Commands
 
-Audio codecs use `DMDRVI_IOCTL_AUDIO_*` (0x500 range) for their control plane.
-`GET_INFO` reports the hardware ID and applied format, `CONFIGURE` selects a
-format and output, and `SET_VOLUME` / `SET_MUTE` adjust playback without
-reconfiguring the stream. Volume is a normalized percentage from 0 to 100;
-the driver maps it to its hardware gain setting. PCM data travels through a
-separate audio stream node. See [docs/dmdrvi.md](docs/dmdrvi.md#audio-codec-ioctl-commands).
+Audio nodes use `DMDRVI_IOCTL_AUDIO_*` (0x500 range). `GET_INFO`,
+`CONFIGURE`, `SET_VOLUME` and `SET_MUTE` are a codec's controls: hardware ID,
+format and output, a 0..100 volume the driver maps to its gain, mute.
 
-## PCM Stream Ioctl Commands
-
-Serial audio interfaces (SAI, I2S, TDM controllers) use `DMDRVI_IOCTL_PCM_*`
-(0x600 range). PCM frames travel through ordinary `read`/`write` on the node;
-`GET_CONFIG` describes them (rate, sample format, framing, slots, directions),
-`START` / `STOP` run the transfer, `GET_STATUS` reports the achieved rate and
-underrun/overrun counters, `SET_TIMEOUT` / `GET_TIMEOUT` bound the waits of the
-open handle and `DRAIN` waits until written frames have left the interface. A
-codec driver drives such a node through these commands without knowing the
-controller. See [docs/dmdrvi.md](docs/dmdrvi.md#pcm-stream-ioctl-commands).
+The stream commands - `GET_STREAM`, `START`, `STOP`, `GET_STATUS`,
+`SET_TIMEOUT` / `GET_TIMEOUT` and `DRAIN` - are implemented by every node
+that carries samples through `read`/`write`: a codec (samples in channels,
+e.g. stereo) and a bare serial audio interface such as SAI, I2S or TDM
+(samples in its wire slots). An application plays the same way on both -
+`CONFIGURE` (optional), `START`, `write`, `DRAIN`, `STOP` - and learns the
+buffer layout from `GET_STREAM`. A serial interface accepts `CONFIGURE` only
+for its fixed format and answers the analog controls with `-ENOTSUP`. See
+[docs/dmdrvi.md](docs/dmdrvi.md#audio-ioctl-commands).
 
 ## Device File System Ioctl Commands
 

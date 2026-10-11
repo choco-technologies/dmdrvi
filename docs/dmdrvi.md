@@ -230,50 +230,6 @@ specific extras (chip registers, calibration) use commands from
 `DMDRVI_IOCTL_CUSTOM_BASE` on; standard commands a driver cannot honour
 return `-ENOTSUP`, unknown ones `-ENOTTY`.
 
-### Audio Codec Ioctl Commands
-
-Audio codec nodes implement the standard `DMDRVI_IOCTL_AUDIO_*` commands
-(0x500 range). These commands control the codec; PCM read/write belongs to a
-separate stream node. A client supplies the codec device path, without knowing
-which chip is connected.
-
-| Command | `arg` type | Meaning |
-|---------|------------|---------|
-| `DMDRVI_IOCTL_AUDIO_GET_INFO` | `dmdrvi_audio_info_t*` | Read hardware ID and last applied configuration |
-| `DMDRVI_IOCTL_AUDIO_CONFIGURE` | `const dmdrvi_audio_config_t*` | Set PCM rate, channels, sample width, output, volume and mute |
-| `DMDRVI_IOCTL_AUDIO_SET_VOLUME` | `const uint8_t*` | Set output volume from 0 to 100 percent |
-| `DMDRVI_IOCTL_AUDIO_SET_MUTE` | `const bool*` | Set playback mute |
-
-`dmdrvi_audio_info_t.configured` is false until configuration succeeds and
-after a driver detects that the codec lost its settings. Unsupported rates,
-formats or outputs return `-ENOTSUP`; unsupported standard commands also
-return `-ENOTSUP`. The hardware ID is device-specific; generic clients need
-not inspect it. The output choice is one of headphone, speaker or line. A
-driver may support only a subset. Volume is a normalized percentage, so each
-codec driver maps it to its own gain register.
-
-### PCM Stream Ioctl Commands
-
-Serial audio interface nodes (SAI, I2S, TDM) implement the standard
-`DMDRVI_IOCTL_PCM_*` commands (0x600 range). PCM samples are read and written
-through the node in whole frames: the active slots (`active_slots`, ascending)
-interleaved, each sample in `format`. A request size must be a multiple of
-the frame size; a transfer may return fewer whole frames.
-
-| Command | `arg` type | Meaning |
-|---------|------------|---------|
-| `DMDRVI_IOCTL_PCM_GET_CONFIG` | `dmdrvi_pcm_config_t*` | Read rate, sample format, framing, clock role, slots and directions |
-| `DMDRVI_IOCTL_PCM_START` | `NULL` | Start the configured directions; `-EBUSY` when running |
-| `DMDRVI_IOCTL_PCM_STOP` | `NULL` | Stop and wake pending I/O; succeeds when idle |
-| `DMDRVI_IOCTL_PCM_GET_STATUS` | `dmdrvi_pcm_status_t*` | Achieved rate, running flag, underrun/overrun/error counters |
-| `DMDRVI_IOCTL_PCM_SET_TIMEOUT` | `const uint32_t*` | Wait limit of this handle in ms; 0 means no limit |
-| `DMDRVI_IOCTL_PCM_GET_TIMEOUT` | `uint32_t*` | Read the handle's wait limit |
-| `DMDRVI_IOCTL_PCM_DRAIN` | `NULL` | Wait until written frames left the interface; `-EPIPE` when stopped |
-
-The configuration comes from the node's ini section; these commands do not
-change it. A codec driver (`DMDRVI_IOCTL_AUDIO_*`) typically opens its PCM
-friend, checks `GET_CONFIG` against the codec's interface format and starts it.
-
 #### Info
 
 `dmdrvi_input_info_t` holds the device model (`name`, e.g. `"FT5336"`), its
@@ -357,6 +313,34 @@ names, so every board file looks the same:
 | `invert_x`, `invert_y` | `on`: mirror the axis (applied after `swap_xy`) |
 | `interrupt_handler` | dmhaman handler of the device's interrupt pin (empty = poll) |
 | `poll_interval_ms` | Polling period of `WAIT_EVENT` without an interrupt |
+
+### Audio Ioctl Commands
+
+Audio nodes implement the standard `DMDRVI_IOCTL_AUDIO_*` commands (0x500
+range): analog controls of a codec and one stream contract shared by codecs
+and bare serial audio interfaces (SAI, I2S, TDM). A client supplies the
+device path without knowing which chip or controller is behind it.
+
+| Command | `arg` type | Codec | Serial interface |
+|---------|------------|-------|------------------|
+| `DMDRVI_IOCTL_AUDIO_GET_INFO` | `dmdrvi_audio_info_t*` | hardware ID, applied configuration | `-ENOTSUP` |
+| `DMDRVI_IOCTL_AUDIO_CONFIGURE` | `const dmdrvi_audio_config_t*` | rate, channels, width, output, volume, mute; may start the stream | `0` when rate, channels and width match its fixed format, else `-ENOTSUP` |
+| `DMDRVI_IOCTL_AUDIO_SET_VOLUME` | `const uint8_t*` | volume 0..100 % | `-ENOTSUP` |
+| `DMDRVI_IOCTL_AUDIO_SET_MUTE` | `const bool*` | playback mute | `-ENOTSUP` |
+| `DMDRVI_IOCTL_AUDIO_GET_STREAM` | `dmdrvi_audio_stream_t*` | buffer layout (channels) and the link it drives | buffer layout (active slots) and its link |
+| `DMDRVI_IOCTL_AUDIO_START` | `NULL` | start; `0` when running, `-EPIPE` before a first `CONFIGURE` | start; `0` when running |
+| `DMDRVI_IOCTL_AUDIO_STOP` | `NULL` | stop; succeeds when idle | stop; succeeds when idle |
+| `DMDRVI_IOCTL_AUDIO_GET_STATUS` | `dmdrvi_audio_status_t*` | rate, running flag, underrun/overrun/error counters | same |
+| `DMDRVI_IOCTL_AUDIO_SET_TIMEOUT` / `GET_TIMEOUT` | `uint32_t*` | wait limit of this handle in ms, 0 = none | same |
+| `DMDRVI_IOCTL_AUDIO_DRAIN` | `NULL` | wait until written frames left; `-EPIPE` when stopped | same |
+
+One frame in the read/write buffers is `channels` interleaved samples of
+`format`; request sizes are whole frames and a transfer may return fewer
+whole frames. On a serial interface the channels are the active slots in
+ascending order. `dmdrvi_audio_info_t.configured` is false until
+configuration succeeds and after a driver detects that the codec lost its
+settings. Unsupported rates, formats or outputs return `-ENOTSUP`. The output
+choice is one of headphone, speaker or line; a driver may support a subset.
 
 ### Device File System Ioctl Commands
 
