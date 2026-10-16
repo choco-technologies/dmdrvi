@@ -61,6 +61,7 @@ dmod_setup_external_module()
 # ======================================================================
 # Name of the module 
 set(DMOD_MODULE_NAME        dmdrvi)
+set(DMOD_DMR_PATH ${CMAKE_CURRENT_SOURCE_DIR}/dmdrvi.dmr)
 
 # Version is already set above and used in project()
 # No need to set it again here
