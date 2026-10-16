@@ -417,3 +417,5 @@ The driver interface module has a minimal footprint suitable for embedded system
 ## License
 
 MIT License - see LICENSE file for details
+
+RTC devices share the [RTC ioctl contract](docs/rtc.md), including calendar, capabilities and status.

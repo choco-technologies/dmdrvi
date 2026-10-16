@@ -662,6 +662,76 @@ typedef struct
  */
 #define DMDRVI_IOCTL_AUDIO_DRAIN              0x50A
 
+/* RTC calendar devices (0x600 range). The calendar has no implicit timezone;
+ * clients such as dmutc define UTC policy. None of these flags authenticates time. */
+#define DMDRVI_RTC_CAP_SET_TIME        (1u << 0)
+#define DMDRVI_RTC_CAP_INVALIDATE      (1u << 1)
+#define DMDRVI_RTC_CAP_LOSS_DETECTION  (1u << 2)
+#define DMDRVI_RTC_STATUS_RUNNING      (1u << 0)
+#define DMDRVI_RTC_STATUS_TIME_SET     (1u << 1)
+#define DMDRVI_RTC_STATUS_TIME_LOST    (1u << 2)
+
+/** Gregorian civil time, independent of libc time_t and struct tm.
+ * year: 1..9999; month: 1..12; day: valid day of that month; hour: 0..23;
+ * minute/second: 0..59 (no leap-second encoding); nanosecond: 0..999999999.
+ * weekday is Monday=1..Sunday=7 on read; ignored/computed on set.
+ * reserved must be zero. GET_TIME returns a coherent calendar snapshot.
+ * The accepted device range and granularity are reported by GET_INFO. */
+typedef struct
+{
+    int32_t year;
+    uint8_t month, day, hour, minute, second, weekday;
+    uint16_t reserved;
+    uint32_t nanosecond;
+} dmdrvi_rtc_time_t;
+
+/** Capabilities and inclusive year bounds. resolution_ns is the time quantum
+ * represented by this API, not the oscillator accuracy. It must be nonzero.
+ * All reserved fields are zero. A read-only clock need not support SET_TIME. */
+typedef struct
+{
+    uint64_t resolution_ns;
+    uint32_t capabilities;
+    int32_t min_year;
+    int32_t max_year;
+    uint32_t reserved;
+} dmdrvi_rtc_info_t;
+
+/** flags: DMDRVI_RTC_STATUS_*. TIME_SET means a usable initialized calendar,
+ * never trusted UTC. TIME_LOST is a detected discontinuity, latched until a
+ * successful SET_TIME. It is meaningful only with CAP_LOSS_DETECTION; its
+ * absence never proves continuity on devices without that capability.
+ * INVALIDATE clears TIME_SET but does not acknowledge an existing TIME_LOST.
+ * reserved is zero. Hardware-specific oscillator settings are not exposed. */
+typedef struct
+{
+    uint32_t flags;
+    uint32_t reserved;
+} dmdrvi_rtc_status_t;
+
+/** arg: dmdrvi_rtc_time_t* out; requires readable handle.
+ * 0 on success; -ENODATA if unset/lost, -EIO for hardware failure. A failed
+ * device read clears the output. No partial snapshot may be returned. */
+#define DMDRVI_IOCTL_RTC_GET_TIME       0x600
+/** arg: const dmdrvi_rtc_time_t* in; requires writable handle and CAP_SET_TIME.
+ * 0 after a completed write; -ENOTSUP if unsupported, -EINVAL for malformed
+ * calendar/reserved fields, -ERANGE for device range/precision restrictions.
+ * Unsupported precision must not be silently rounded. Invalid input must not
+ * modify the clock. A failure after writing starts must leave TIME_SET clear. */
+#define DMDRVI_IOCTL_RTC_SET_TIME       0x601
+/** arg: dmdrvi_rtc_status_t* out; requires readable handle; usable when unset. */
+#define DMDRVI_IOCTL_RTC_GET_STATUS     0x602
+/** arg: dmdrvi_rtc_info_t* out; requires readable handle; usable when unset. */
+#define DMDRVI_IOCTL_RTC_GET_INFO       0x603
+/** arg: NULL; requires writable handle and CAP_INVALIDATE. Clears the usable
+ * calendar marker without stopping the oscillator or inventing a new date.
+ * -ENOTSUP if unsupported. */
+#define DMDRVI_IOCTL_RTC_INVALIDATE     0x604
+
+/* All RTC commands return 0 on success or a negative errno-compatible code.
+ * Required output/input pointers must not be NULL (-EINVAL). An inappropriate
+ * handle access mode returns -EACCES. Unknown commands return -ENOTTY. */
+
 /*
  * Device file system commands (0xF00 range) - answered by the file system
  * that exposes the node (dmdevfs), never passed to the driver. They give
@@ -707,7 +777,7 @@ typedef struct
  * commands relative to whichever one happens to be last today would silently
  * collide with a new standard command added later. Standard categories are
  * spaced 0x100 apart (network 0x01, block 0x100, monitor 0x200, graphics
- * 0x300, input 0x400, audio 0x500; 0xF00 is reserved for the device file system), which
+ * 0x300, input 0x400, audio 0x500, RTC 0x600; 0xF00 is reserved for the device file system), which
  * leaves generous headroom before reaching this base.
  */
 #define DMDRVI_IOCTL_CUSTOM_BASE              0x1000
