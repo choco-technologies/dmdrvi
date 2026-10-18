@@ -342,6 +342,29 @@ configuration succeeds and after a driver detects that the codec lost its
 settings. Unsupported rates, formats or outputs return `-ENOTSUP`. The output
 choice is one of headphone, speaker or line; a driver may support a subset.
 
+### Wi-Fi Ioctl Commands
+
+A Wi-Fi network node (a station) is an ordinary network node - `read`/`write`
+of 802.3 frames, `DMDRVI_IOCTL_NET_*` - that also implements the standard
+`DMDRVI_IOCTL_WIFI_*` commands (0x700 range). A client such as the `wifi`
+shell tool (dmnet) uses them without knowing which chip or protocol is behind
+the node, so one tool serves every Wi-Fi driver.
+
+| Command | `arg` type | Meaning |
+|---------|------------|---------|
+| `DMDRVI_IOCTL_WIFI_GET_INFO` | `dmdrvi_wifi_info_t*` | driver, chip and firmware names, MAC, frame and error counters |
+| `DMDRVI_IOCTL_WIFI_GET_STATUS` | `dmdrvi_wifi_status_t*` | state, network, access point, channel, signal, why the last connection ended |
+| `DMDRVI_IOCTL_WIFI_CONNECT` | `const dmdrvi_wifi_connect_t*` | connect and stay on the network (again whenever lost); returns without waiting |
+| `DMDRVI_IOCTL_WIFI_DISCONNECT` | `NULL` | disconnect and forget the network |
+| `DMDRVI_IOCTL_WIFI_SCAN` | `dmdrvi_wifi_scan_t*` | scan; waits for it (a few seconds); the caller gives room for `max` networks |
+
+`CONNECT` is asynchronous: poll `GET_STATUS` until the state is
+`DMDRVI_WIFI_STATE_CONNECTED`. The `reason` of the status is the driver's own
+code (an empty `0` means none). A driver fills `dmdrvi_wifi_info_t` texts it
+does not know yet (`chip` before the radio is reached) with an empty string.
+The address of the interface is not Wi-Fi's: it is the network stack's
+(DHCP, `ifconfig`) as for any interface.
+
 ### Device File System Ioctl Commands
 
 Commands in the 0xF00 range are answered by the file system that exposes

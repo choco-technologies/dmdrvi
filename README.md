@@ -21,6 +21,7 @@ dmdrvi is a driver interface module designed for embedded systems using the DMOD
 - **Dynamic Device Notifications**: Drivers can inform dmdevfs when a device becomes available or unavailable at runtime within an existing context
 - **Network Driver Ioctls**: Built-in ioctl commands for MAC address configuration, link status, and interface start/stop (see `dmdrvi_ioctl.h`)
 - **Audio Ioctls**: Codec controls (identity, format and output, volume, mute) and one stream contract (layout, start/stop, status, I/O timeout, drain) shared by codecs and bare serial audio interfaces (see `dmdrvi_ioctl.h`)
+- **Wi-Fi Ioctls**: Info, status, connect, disconnect and scan of a Wi-Fi network node, the same for every Wi-Fi driver (see `dmdrvi_ioctl.h`)
 - **SAL-Compatible**: Uses only DMOD SAL functions
 - **Lightweight**: Minimal memory footprint suitable for embedded systems
 
@@ -203,6 +204,14 @@ e.g. stereo) and a bare serial audio interface such as SAI, I2S or TDM
 buffer layout from `GET_STREAM`. A serial interface accepts `CONFIGURE` only
 for its fixed format and answers the analog controls with `-ENOTSUP`. See
 [docs/dmdrvi.md](docs/dmdrvi.md#audio-ioctl-commands).
+
+## Wi-Fi Ioctl Commands
+
+A Wi-Fi network node adds `DMDRVI_IOCTL_WIFI_*` (0x700 range) to the network
+commands: `GET_INFO` (driver, chip, firmware, MAC, counters), `GET_STATUS`,
+`CONNECT` (asynchronous, kept), `DISCONNECT` and `SCAN`. Tools and services
+talk to any Wi-Fi driver through them. See
+[docs/dmdrvi.md](docs/dmdrvi.md#wi-fi-ioctl-commands).
 
 ## Device File System Ioctl Commands
 
