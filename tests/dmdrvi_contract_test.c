@@ -39,7 +39,7 @@ _Static_assert(DMDRVI_IOCTL_WIFI_GET_INFO >= 0x700 &&
                DMDRVI_IOCTL_WIFI_SCAN < 0x800,
                "Wi-Fi commands must stay in their own standard range");
 _Static_assert(DMDRVI_IOCTL_DEVFS_GET_FRIEND >= 0xF00 &&
-               DMDRVI_IOCTL_DEVFS_GET_FRIEND < DMDRVI_IOCTL_CUSTOM_BASE,
+               DMDRVI_IOCTL_DEVFS_SET_DEVICE_SECRET < DMDRVI_IOCTL_CUSTOM_BASE,
                "device file system commands must stay in their own standard range");
 _Static_assert(sizeof(dmdrvi_input_contact_t) == 8,
                "input contacts must have no padding");
@@ -131,7 +131,7 @@ DMOD_TEST_STEP(dmdrvi_monitor_commands_are_distinct)
         DMDRVI_IOCTL_AUDIO_GET_STREAM, DMDRVI_IOCTL_AUDIO_START, DMDRVI_IOCTL_AUDIO_STOP,
         DMDRVI_IOCTL_AUDIO_GET_STATUS, DMDRVI_IOCTL_AUDIO_SET_TIMEOUT,
         DMDRVI_IOCTL_AUDIO_GET_TIMEOUT, DMDRVI_IOCTL_AUDIO_DRAIN,
-        DMDRVI_IOCTL_DEVFS_GET_FRIEND,
+        DMDRVI_IOCTL_DEVFS_GET_FRIEND, DMDRVI_IOCTL_DEVFS_SET_DEVICE_SECRET,
         DMDRVI_IOCTL_RTC_GET_TIME, DMDRVI_IOCTL_RTC_SET_TIME,
         DMDRVI_IOCTL_RTC_GET_STATUS, DMDRVI_IOCTL_RTC_GET_INFO, DMDRVI_IOCTL_RTC_INVALIDATE,
         DMDRVI_IOCTL_WIFI_GET_INFO, DMDRVI_IOCTL_WIFI_GET_STATUS, DMDRVI_IOCTL_WIFI_CONNECT,

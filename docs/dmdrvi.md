@@ -375,6 +375,7 @@ system knows about a node.
 | Command | `arg` type | Meaning |
 |---------|------------|---------|
 | `DMDRVI_IOCTL_DEVFS_GET_FRIEND` | `dmdrvi_devfs_friend_t*` | The `index`-th other member of the node's `friends_group`: its absolute `path` and `role`; `-ENOENT` when there is none |
+| `DMDRVI_IOCTL_DEVFS_SET_DEVICE_SECRET` | `const dmdrvi_devfs_secret_t*` | The platform hands the device secret (1..64 bytes) to dmdevfs, once, after mounting: dmdevfs serves it as the read-only node `/devkey`; `-EEXIST` when it was set already |
 
 There is no length limit: the caller passes its own buffers, and
 `path_length` / `role_length` are always filled in. With NULL buffers (or

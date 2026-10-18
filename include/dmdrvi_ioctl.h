@@ -899,6 +899,32 @@ typedef struct
 #define DMDRVI_IOCTL_DEVFS_GET_FRIEND        0xF00
 
 /**
+ * The device secret: a few bytes unique to the device (or the firmware build),
+ * known to whatever boots the system (dmod-boot, from its build). It is the root
+ * of what the system keeps encrypted at rest (see dmsecrets).
+ */
+typedef struct
+{
+    const void* secret;     /**< In: the bytes (copied) */
+    size_t      size;       /**< In: 1..64 */
+} dmdrvi_devfs_secret_t;
+
+/**
+ * Hands the device secret to the file system, once: dmdevfs keeps it and serves
+ * it as a read-only node, `/devkey` of that mount (a file like any other, so
+ * permissions on it - when the system has users - say who may read it). The caller
+ * is the platform that boots the system, right after mounting, before any module
+ * runs; it must not keep its copy. The call is answered by dmdevfs on any of its
+ * nodes, never by a driver.
+ *
+ * -EEXIST when a secret was set already (the first call wins: nothing later can
+ * replace it), -EINVAL for NULL, a size of 0 or over 64.
+ *
+ * arg: const dmdrvi_devfs_secret_t*
+ */
+#define DMDRVI_IOCTL_DEVFS_SET_DEVICE_SECRET 0xF01
+
+/**
  * @brief Start of the reserved range for driver-specific custom ioctl commands
  *
  * A driver built on dmdrvi (e.g. a network driver needing something beyond
