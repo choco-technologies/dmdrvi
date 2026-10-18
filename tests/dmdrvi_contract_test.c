@@ -49,6 +49,14 @@ _Static_assert(sizeof(((dmdrvi_monitor_policy_t*)0)->event_handler) ==
                DMDRVI_MONITOR_HANDLER_NAME_MAX,
                "monitor policy must carry the handler name inline");
 
+_Static_assert(sizeof(dmdrvi_rtc_time_t) == 16 &&
+               offsetof(dmdrvi_rtc_time_t, nanosecond) == 12,
+               "RTC calendar layout must be stable across 32/64-bit targets");
+_Static_assert(sizeof(dmdrvi_rtc_info_t) == 24 && sizeof(dmdrvi_rtc_status_t) == 8,
+               "RTC info and status must use fixed-width fields");
+_Static_assert(DMDRVI_IOCTL_RTC_GET_TIME >= 0x600 && DMDRVI_IOCTL_RTC_INVALIDATE < 0x700,
+               "RTC commands must stay in their standard category");
+
 static int contains(const char* text, const char* needle)
 {
     for( ; *text != '\0'; ++text )
@@ -123,9 +131,11 @@ DMOD_TEST_STEP(dmdrvi_monitor_commands_are_distinct)
         DMDRVI_IOCTL_AUDIO_GET_STREAM, DMDRVI_IOCTL_AUDIO_START, DMDRVI_IOCTL_AUDIO_STOP,
         DMDRVI_IOCTL_AUDIO_GET_STATUS, DMDRVI_IOCTL_AUDIO_SET_TIMEOUT,
         DMDRVI_IOCTL_AUDIO_GET_TIMEOUT, DMDRVI_IOCTL_AUDIO_DRAIN,
+        DMDRVI_IOCTL_DEVFS_GET_FRIEND,
+        DMDRVI_IOCTL_RTC_GET_TIME, DMDRVI_IOCTL_RTC_SET_TIME,
+        DMDRVI_IOCTL_RTC_GET_STATUS, DMDRVI_IOCTL_RTC_GET_INFO, DMDRVI_IOCTL_RTC_INVALIDATE,
         DMDRVI_IOCTL_WIFI_GET_INFO, DMDRVI_IOCTL_WIFI_GET_STATUS, DMDRVI_IOCTL_WIFI_CONNECT,
         DMDRVI_IOCTL_WIFI_DISCONNECT, DMDRVI_IOCTL_WIFI_SCAN,
-        DMDRVI_IOCTL_DEVFS_GET_FRIEND,
     };
     const int count = (int)(sizeof(commands) / sizeof(commands[0]));
     int duplicates = 0;
