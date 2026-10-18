@@ -733,6 +733,137 @@ typedef struct
  * handle access mode returns -EACCES. Unknown commands return -ENOTTY. */
 
 /*
+ * Wi-Fi (0x700 range) - implemented by a station-capable Wi-Fi network node
+ * on top of the network commands (DMDRVI_IOCTL_NET_*, read()/write() of
+ * 802.3 frames): which network it is on, which ones are around. A client
+ * (the shell's wifi tool, a provisioning service) uses them without knowing
+ * which chip or protocol is behind the node.
+ */
+
+#define DMDRVI_WIFI_SSID_MAX        32  /**< Longest SSID, without the terminator. */
+#define DMDRVI_WIFI_PASSWORD_MAX    64  /**< Longest passphrase, without the terminator. */
+#define DMDRVI_WIFI_MAC_LEN         6   /**< Length of a MAC address / BSSID. */
+#define DMDRVI_WIFI_NAME_MAX        32  /**< Longest driver / chip / firmware text, with the terminator. */
+
+/** @brief Where the Wi-Fi of a node is. */
+typedef enum
+{
+    DMDRVI_WIFI_STATE_OFF = 0,          /**< The radio is not there (yet), or was lost. */
+    DMDRVI_WIFI_STATE_STARTING,         /**< The radio is being started. */
+    DMDRVI_WIFI_STATE_IDLE,             /**< Started, not connected to a network. */
+    DMDRVI_WIFI_STATE_CONNECTING,       /**< Connecting (again) to the network set. */
+    DMDRVI_WIFI_STATE_CONNECTED,        /**< Connected: the link is up. */
+} dmdrvi_wifi_state_t;
+
+/** @brief How a network is secured. */
+typedef enum
+{
+    DMDRVI_WIFI_AUTH_OPEN = 0,
+    DMDRVI_WIFI_AUTH_WEP,
+    DMDRVI_WIFI_AUTH_WPA,               /**< WPA-PSK */
+    DMDRVI_WIFI_AUTH_WPA2,              /**< WPA2-PSK */
+    DMDRVI_WIFI_AUTH_WPA_WPA2,
+    DMDRVI_WIFI_AUTH_WPA2_ENTERPRISE,
+    DMDRVI_WIFI_AUTH_WPA3,              /**< WPA3-PSK (SAE) */
+    DMDRVI_WIFI_AUTH_WPA2_WPA3,
+    DMDRVI_WIFI_AUTH_OTHER = 0xFF,      /**< Anything else the driver cannot name. */
+} dmdrvi_wifi_auth_t;
+
+/**
+ * @brief What is behind the node: DMDRVI_IOCTL_WIFI_GET_INFO.
+ *
+ * Texts are terminated; a driver leaves what it does not know empty (or 0).
+ */
+typedef struct
+{
+    char        driver[DMDRVI_WIFI_NAME_MAX];   /**< The driver, e.g. "dmesphosted". */
+    char        chip[DMDRVI_WIFI_NAME_MAX];     /**< The radio, e.g. "ESP32-C3" ("" not known yet). */
+    char        firmware[DMDRVI_WIFI_NAME_MAX]; /**< Its firmware, e.g. "ESP-Hosted 2.0.0". */
+    uint8_t     mac[DMDRVI_WIFI_MAC_LEN];       /**< The station's MAC address (zeros when not known yet). */
+    uint32_t    rx_frames;                      /**< 802.3 frames received from the network ... */
+    uint32_t    tx_frames;                      /**< ... and sent to it. */
+    uint32_t    rx_dropped;                     /**< Received with no room for them. */
+    uint32_t    tx_dropped;                     /**< Not sent: link down, no room. */
+    uint32_t    errors;                         /**< Damaged transfers with the radio. */
+    uint32_t    resets;                         /**< Times the radio was (re)started. */
+} dmdrvi_wifi_info_t;
+
+/** @brief The connection: DMDRVI_IOCTL_WIFI_GET_STATUS. */
+typedef struct
+{
+    dmdrvi_wifi_state_t state;
+    char        ssid[DMDRVI_WIFI_SSID_MAX + 1];     /**< The network set ("" none). */
+    uint8_t     bssid[DMDRVI_WIFI_MAC_LEN];         /**< Its access point, when connected. */
+    uint8_t     channel;                            /**< When connected. */
+    int8_t      rssi;                               /**< dBm when connected, 0: not known. */
+    uint16_t    reason;                             /**< Why the last connection ended - the driver's own code (0: none). */
+} dmdrvi_wifi_status_t;
+
+/** @brief The network to connect to: DMDRVI_IOCTL_WIFI_CONNECT. */
+typedef struct
+{
+    char        ssid[DMDRVI_WIFI_SSID_MAX + 1];
+    char        password[DMDRVI_WIFI_PASSWORD_MAX + 1]; /**< "" for an open network. */
+} dmdrvi_wifi_connect_t;
+
+/** @brief A network found by DMDRVI_IOCTL_WIFI_SCAN. */
+typedef struct
+{
+    char        ssid[DMDRVI_WIFI_SSID_MAX + 1];     /**< "" for a hidden one. */
+    uint8_t     bssid[DMDRVI_WIFI_MAC_LEN];
+    uint8_t     channel;
+    int8_t      rssi;                               /**< dBm. */
+    uint8_t     auth;                               /**< dmdrvi_wifi_auth_t. */
+} dmdrvi_wifi_ap_t;
+
+/** @brief The scan: the caller's room in, the number found out. */
+typedef struct
+{
+    dmdrvi_wifi_ap_t   *aps;            /**< In: room for max of them. */
+    uint16_t            max;            /**< In. */
+    uint16_t            count;          /**< Out: how many were stored (at most max). */
+} dmdrvi_wifi_scan_t;
+
+/**
+ * @brief Read what is behind the node.
+ * @param arg Output pointer to dmdrvi_wifi_info_t.
+ * @return 0 on success, or a negative errno-compatible code.
+ */
+#define DMDRVI_IOCTL_WIFI_GET_INFO            0x700
+
+/**
+ * @brief Read the connection.
+ * @param arg Output pointer to dmdrvi_wifi_status_t.
+ * @return 0 on success, or a negative errno-compatible code.
+ */
+#define DMDRVI_IOCTL_WIFI_GET_STATUS          0x701
+
+/**
+ * @brief Connect to a network and stay on it: the driver connects again
+ * whenever the link is lost, until DISCONNECT. Returns without waiting - poll
+ * GET_STATUS for DMDRVI_WIFI_STATE_CONNECTED.
+ * @param arg Input pointer to const dmdrvi_wifi_connect_t.
+ * @return 0 when taken, -EINVAL for an SSID or a passphrase the radio
+ * refuses, or another negative errno-compatible code.
+ */
+#define DMDRVI_IOCTL_WIFI_CONNECT             0x702
+
+/**
+ * @brief Disconnect and forget the network.
+ * @param arg NULL.
+ * @return 0, also when there was none.
+ */
+#define DMDRVI_IOCTL_WIFI_DISCONNECT          0x703
+
+/**
+ * @brief Scan for networks; returns when the scan is done (a few seconds).
+ * @param arg dmdrvi_wifi_scan_t: the room in, the count out.
+ * @return 0 on success, -EBUSY when a scan is running, -ETIMEDOUT, or another
+ * negative errno-compatible code.
+ */
+#define DMDRVI_IOCTL_WIFI_SCAN                0x704
+
+/*
  * Device file system commands (0xF00 range) - answered by the file system
  * that exposes the node (dmdevfs), never passed to the driver. They give
  * everybody, not only drivers (dmdrvi_friend_changed()), access to what the
@@ -777,7 +908,7 @@ typedef struct
  * commands relative to whichever one happens to be last today would silently
  * collide with a new standard command added later. Standard categories are
  * spaced 0x100 apart (network 0x01, block 0x100, monitor 0x200, graphics
- * 0x300, input 0x400, audio 0x500, RTC 0x600; 0xF00 is reserved for the device file system), which
+ * 0x300, input 0x400, audio 0x500, RTC 0x600, Wi-Fi 0x700; 0xF00 is reserved for the device file system), which
  * leaves generous headroom before reaching this base.
  */
 #define DMDRVI_IOCTL_CUSTOM_BASE              0x1000
