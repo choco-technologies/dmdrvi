@@ -199,6 +199,9 @@ typedef enum
     DMDRVI_GFX_PIXEL_FORMAT_RGB565,        /**< 16 bpp */
     DMDRVI_GFX_PIXEL_FORMAT_ARGB1555,      /**< 16 bpp, 1-bit alpha */
     DMDRVI_GFX_PIXEL_FORMAT_ARGB4444,      /**< 16 bpp, 4-bit alpha */
+    DMDRVI_GFX_PIXEL_FORMAT_MONO1,         /**< 1 bpp, 8 pixels per byte, the leftmost one in the most significant bit;
+                                                bit set = white (light), clear = black (dark). A line is padded to
+                                                whole bytes (stride), bytes_per_pixel is 0 */
 
     DMDRVI_GFX_PIXEL_FORMAT_COUNT
 } dmdrvi_gfx_pixel_format_t;
@@ -209,7 +212,7 @@ typedef struct
     uint16_t                  width;             /**< Active width in pixels */
     uint16_t                  height;            /**< Active height in lines */
     dmdrvi_gfx_pixel_format_t pixel_format;      /**< Framebuffer pixel format */
-    uint8_t                   bytes_per_pixel;   /**< Bytes of one pixel */
+    uint8_t                   bytes_per_pixel;   /**< Bytes of one pixel (0 for a format of less than 8 bits: use stride) */
     uint32_t                  stride;            /**< Bytes of one line */
     uint32_t                  framebuffer_size;  /**< Bytes of one buffer (stride * height) */
     uint8_t                   buffer_count;      /**< 1, or 2 when double buffered */

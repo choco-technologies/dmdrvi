@@ -29,6 +29,12 @@ _Static_assert(DMDRVI_IOCTL_MONITOR_GET_POLICY >= 0x200 &&
 _Static_assert(DMDRVI_IOCTL_GFX_GET_INFO >= 0x300 &&
                DMDRVI_IOCTL_GFX_PRESENT < DMDRVI_IOCTL_CUSTOM_BASE,
                "graphics commands must stay in their own standard range");
+/* The values of the pixel formats are what the drivers report: a new format goes at the end */
+_Static_assert(DMDRVI_GFX_PIXEL_FORMAT_ARGB8888 == 0 && DMDRVI_GFX_PIXEL_FORMAT_RGB888 == 1 &&
+               DMDRVI_GFX_PIXEL_FORMAT_RGB565 == 2 && DMDRVI_GFX_PIXEL_FORMAT_ARGB1555 == 3 &&
+               DMDRVI_GFX_PIXEL_FORMAT_ARGB4444 == 4 && DMDRVI_GFX_PIXEL_FORMAT_MONO1 == 5 &&
+               DMDRVI_GFX_PIXEL_FORMAT_COUNT == 6,
+               "pixel formats must keep their values, new ones are appended");
 _Static_assert(DMDRVI_IOCTL_INPUT_GET_INFO >= 0x400 &&
                DMDRVI_IOCTL_INPUT_WAIT_EVENT < DMDRVI_IOCTL_CUSTOM_BASE,
                "input commands must stay in their own standard range");
