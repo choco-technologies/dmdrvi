@@ -207,7 +207,10 @@ the drawing buffer at the next frame and copies the area drawn into the other
 buffer, so a client that redraws only what changed draws without tearing and
 without redrawing the rest; single buffered, it writes the area back from the
 data cache. Reading/writing the node accesses the drawing buffer at the given
-byte offset. Commands a driver cannot
+byte offset. A monochrome device (e-paper, a bare OLED) reports
+`DMDRVI_GFX_PIXEL_FORMAT_MONO1`: 8 pixels per byte, the leftmost one in the
+most significant bit, bit set = white, `bytes_per_pixel` 0 (the line is
+`stride` bytes). Commands a driver cannot
 honour return `-ENOTSUP`; driver-specific ones use `DMDRVI_IOCTL_CUSTOM_BASE`.
 
 ### Input Ioctl Commands
