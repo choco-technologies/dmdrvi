@@ -415,6 +415,7 @@ system knows about a node.
 | Command | `arg` type | Meaning |
 |---------|------------|---------|
 | `DMDRVI_IOCTL_DEVFS_GET_FRIEND` | `dmdrvi_devfs_friend_t*` | The `index`-th other member of the node's `friends_group`: its absolute `path` and `role`; `-ENOENT` when there is none |
+| `DMDRVI_IOCTL_DEVFS_GET_GROUP` | `dmdrvi_devfs_group_t*` | The name of the node's `friends_group` (`""` when it has none, `-ERANGE` when longer than `DMDRVI_DEVFS_GROUP_NAME_MAX - 1`): nodes that belong together - a display and its inputs - have the same name, so they can be told apart by comparing names |
 
 There is no length limit: the caller passes its own buffers, and
 `path_length` / `role_length` are always filled in. With NULL buffers (or

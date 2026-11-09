@@ -1006,6 +1006,25 @@ typedef struct
  */
 #define DMDRVI_IOCTL_DEVFS_GET_FRIEND        0xF00
 
+/** Longest friends_group name DMDRVI_IOCTL_DEVFS_GET_GROUP returns, with the terminator. */
+#define DMDRVI_DEVFS_GROUP_NAME_MAX          32u
+
+/** The friends_group of a node. */
+typedef struct
+{
+    char name[DMDRVI_DEVFS_GROUP_NAME_MAX];     /**< Out: its name, "" when the node has none */
+} dmdrvi_devfs_group_t;
+
+/**
+ * The name of the node's friends_group - what the members of a group have in common, so a
+ * consumer can tell which nodes belong together (the input devices of a display) by comparing
+ * names, without walking the members. "" when the node is in none. -ERANGE when the name
+ * does not fit (DMDRVI_DEVFS_GROUP_NAME_MAX - 1 characters), -EINVAL for a NULL arg.
+ *
+ * arg: dmdrvi_devfs_group_t* - output buffer
+ */
+#define DMDRVI_IOCTL_DEVFS_GET_GROUP         0xF01
+
 /**
  * @brief Start of the reserved range for driver-specific custom ioctl commands
  *
