@@ -49,6 +49,8 @@ _Static_assert(DMDRVI_IOCTL_DEVFS_GET_FRIEND >= 0xF00 &&
                "device file system commands must stay in their own standard range");
 _Static_assert(sizeof(dmdrvi_input_contact_t) == 8,
                "input contacts must have no padding");
+_Static_assert(sizeof(dmdrvi_devfs_group_t) == DMDRVI_DEVFS_GROUP_NAME_MAX,
+               "the group name is the whole structure");
 _Static_assert(sizeof(dmdrvi_key_event_t) == 8 && offsetof(dmdrvi_key_event_t, code) == 4,
                "key events must have no padding and a stable layout on 32/64-bit targets");
 _Static_assert(sizeof(dmdrvi_key_events_t) == 4 + 8 * DMDRVI_KEY_MAX_EVENTS,
@@ -144,7 +146,7 @@ DMOD_TEST_STEP(dmdrvi_monitor_commands_are_distinct)
         DMDRVI_IOCTL_AUDIO_GET_STREAM, DMDRVI_IOCTL_AUDIO_START, DMDRVI_IOCTL_AUDIO_STOP,
         DMDRVI_IOCTL_AUDIO_GET_STATUS, DMDRVI_IOCTL_AUDIO_SET_TIMEOUT,
         DMDRVI_IOCTL_AUDIO_GET_TIMEOUT, DMDRVI_IOCTL_AUDIO_DRAIN,
-        DMDRVI_IOCTL_DEVFS_GET_FRIEND,
+        DMDRVI_IOCTL_DEVFS_GET_FRIEND, DMDRVI_IOCTL_DEVFS_GET_GROUP,
         DMDRVI_IOCTL_RTC_GET_TIME, DMDRVI_IOCTL_RTC_SET_TIME,
         DMDRVI_IOCTL_RTC_GET_STATUS, DMDRVI_IOCTL_RTC_GET_INFO, DMDRVI_IOCTL_RTC_INVALIDATE,
         DMDRVI_IOCTL_WIFI_GET_INFO, DMDRVI_IOCTL_WIFI_GET_STATUS, DMDRVI_IOCTL_WIFI_CONNECT,
