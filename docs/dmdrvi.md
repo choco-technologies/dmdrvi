@@ -254,59 +254,38 @@ kind (`DMDRVI_INPUT_TYPE_TOUCHSCREEN`, `_MOUSE`, `_BUTTONS`, `_KEYBOARD`), the
 
 #### Keyboards
 
-A keyboard (`DMDRVI_INPUT_TYPE_KEYBOARD`, `DMDRVI_INPUT_CAP_KEYS`) reports
-**events**, not a state: a state loses a key that went down and up while the
-reader was busy (an e-paper refresh takes 700 ms), an event does not.
+A keyboard (`DMDRVI_INPUT_TYPE_KEYBOARD`, `DMDRVI_INPUT_CAP_KEYS`) reports its
+keys as they go down and up - **raw events**, nothing more:
 
 ```c
 typedef struct {
     uint32_t time_ms;    /* when it happened (monotonic) */
     uint16_t code;       /* a USB HID usage, or DMDRVI_KEY_VENDOR_BASE + n for keys that have none */
-    uint8_t  action;     /* DMDRVI_KEY_ACTION_DOWN / _UP / _REPEAT / _RESET */
-    uint8_t  modifiers;  /* DMDRVI_KEY_MOD_SHIFT / _CTRL / _ALT / _SYM / _CAPS */
+    uint8_t  action;     /* DMDRVI_KEY_ACTION_DOWN / _UP / _OVERFLOW */
+    uint8_t  reserved;
 } dmdrvi_key_event_t;
 ```
 
-The code is the place of the key, not the character. Shift, alt and sym (the
-layers of a small keyboard) and the layout of a language are the job of the
-code above the driver.
+The driver knows *which key* it is (from its configuration: the place of the
+key) and nothing of what it means. Modifier keys are keys like the others
+("shift down", "shift up"); shift, alt and sym layers, the layout of a
+language and repeating a held key are the job of the code that reads the
+events.
 
 | Command | `arg` type | Meaning |
 |---------|------------|---------|
 | `DMDRVI_IOCTL_INPUT_KEY_READ` | `dmdrvi_key_events_t*` | Take the events that waited (up to `DMDRVI_KEY_MAX_EVENTS`); never blocks, `count` 0 when none. `read()` of the node is the same |
 | `DMDRVI_IOCTL_INPUT_WAIT_EVENT` | `const uint32_t*` | Block until an event waits for this open node |
-| `DMDRVI_IOCTL_INPUT_KEY_LISTEN` | `const dmdrvi_key_listener_t*` | Add / remove (`handler` NULL) a handler called for each event |
-| `DMDRVI_IOCTL_INPUT_KEY_GET_CONFIG` / `_SET_CONFIG` | `dmdrvi_key_config_t*` | Repeat delay and period, `max_age_ms`, `queue_depth` |
 | `DMDRVI_IOCTL_INPUT_SET_LIGHT` / `_GET_LIGHT` | `uint8_t*` | The keyboard's backlight in percent (`DMDRVI_INPUT_CAP_LIGHT`) |
 
-`GET_STATE` of a keyboard returns `-ENOTSUP`.
+`GET_STATE` of a keyboard returns `-ENOTSUP`. `0x404 .. 0x406` are not used.
 
-**Who gets the events.** A key goes down, the chip raises its interrupt, the
-interrupt only wakes the task of the driver, and that task reads the chip (an
-I2C transfer is not for an interrupt). Then each event goes to every consumer:
-
-* a **listener**: its handler is called in the task of the driver, for each
-  event as it happens. It has to return at once - drawing and everything that
-  takes time is for the consumer's own thread, otherwise the driver does not
-  read the chip and keys are lost. A listener has no queue.
-* an **open node**: it reads the events with `read()` /
-  `DMDRVI_IOCTL_INPUT_KEY_READ` and waits for them with `WAIT_EVENT`. Each open
-  has a queue of its own.
-
-**Nothing is kept for nobody.** With no listener and no open node an event is
-dropped, so what a consumer finds when it starts is nothing - never the keys of
-the minutes before. The queue of an open node is
-
-* small: `queue_depth` events; when it is full the **oldest** is dropped,
-* empty when the node is opened,
-* without events older than `max_age_ms` (a reader that wakes late does not
-  see them; 0 = no limit).
-
-A dropped event could be the one that releases a key (then shift would be held
-for ever). After any drop the next event the consumer gets is
-`DMDRVI_KEY_ACTION_RESET` (code 0): forget the keys held down; its `modifiers`
-are the real ones.
-
+Events are collected while the node is open. Each open has a queue of its own,
+empty when it is opened, so a reader never finds the keys of the minutes
+before it; with no open node an event is dropped. The queue is bounded: when it
+is full the **oldest** event is dropped and the next one the reader gets is
+`DMDRVI_KEY_ACTION_OVERFLOW` (code 0) - events were lost, a key it saw go down
+may be up by now.
 
 #### State
 
