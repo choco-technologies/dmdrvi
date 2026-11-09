@@ -490,7 +490,7 @@ static inline bool dmdrvi_input_state_equal(const dmdrvi_input_state_t* a, const
  * reads the events.
  *
  * A key code is a USB HID keyboard usage (page 0x07: A is 0x04, Enter 0x28, ...), for
- * keys that have none (Sym, a microphone key) a code from DMDRVI_KEY_VENDOR_BASE on.
+ * keys that have none (Sym, a microphone key, a dollar key) the codes DMDRVI_KEY_SYM, DMDRVI_KEY_MIC, DMDRVI_KEY_DOLLAR - the same for every driver.
  * The modifier keys are keys like the others: a "shift down" and a "shift up".
  *
  * Events are collected while the node is open: each open has a queue of its own, empty
@@ -500,8 +500,19 @@ static inline bool dmdrvi_input_state_equal(const dmdrvi_input_state_t* a, const
  * be up). With no open node an event is dropped.
  */
 
-/** Keys that are not on a USB keyboard have codes from here on (a driver documents its own). */
+/**
+ * Keys that are not on a USB keyboard have codes from here on. The ones below are the same for every driver: the code that reads
+ * the events (libinput) knows them, so a driver gives its key this code and nothing has to map it. A driver with a key of its own
+ * takes a code from DMDRVI_KEY_VENDOR_BASE + 0x10 on.
+ */
 #define DMDRVI_KEY_VENDOR_BASE               0x100u
+
+/** The Sym key of a small keyboard: a modifier that chooses the layer of the symbols printed on the keys. */
+#define DMDRVI_KEY_SYM                       (DMDRVI_KEY_VENDOR_BASE + 0u)
+/** The microphone key. */
+#define DMDRVI_KEY_MIC                       (DMDRVI_KEY_VENDOR_BASE + 1u)
+/** The key with the dollar sign (a currency key of its own, not a shifted digit). */
+#define DMDRVI_KEY_DOLLAR                    (DMDRVI_KEY_VENDOR_BASE + 2u)
 
 /** Some USB HID usages (letters: DMDRVI_KEY_A + n, digits: DMDRVI_KEY_1 .. DMDRVI_KEY_9, DMDRVI_KEY_0). */
 #define DMDRVI_KEY_A                         0x04u
@@ -535,7 +546,7 @@ typedef enum
 typedef struct
 {
     uint32_t time_ms;       /**< When it happened (a monotonic clock, ms) */
-    uint16_t code;          /**< The key: a USB HID usage or DMDRVI_KEY_VENDOR_BASE + n */
+    uint16_t code;          /**< The key: a USB HID usage, or DMDRVI_KEY_SYM, DMDRVI_KEY_MIC, ... */
     uint8_t  action;        /**< dmdrvi_key_action_t */
     uint8_t  reserved;      /**< Zero */
 } dmdrvi_key_event_t;
