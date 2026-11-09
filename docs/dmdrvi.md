@@ -260,7 +260,7 @@ keys as they go down and up - **raw events**, nothing more:
 ```c
 typedef struct {
     uint32_t time_ms;    /* when it happened (monotonic) */
-    uint16_t code;       /* a USB HID usage, or DMDRVI_KEY_VENDOR_BASE + n for keys that have none */
+    uint16_t code;       /* a USB HID usage, or DMDRVI_KEY_SYM / _MIC / _DOLLAR for keys that have none */
     uint8_t  action;     /* DMDRVI_KEY_ACTION_DOWN / _UP / _OVERFLOW */
     uint8_t  reserved;
 } dmdrvi_key_event_t;

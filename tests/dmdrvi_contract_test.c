@@ -204,6 +204,10 @@ DMOD_TEST_STEP(dmdrvi_key_events_describe_keys)
     DMOD_TEST_EXPECT_EQ(DMDRVI_KEY_1 + 9u, DMDRVI_KEY_0);
     DMOD_TEST_EXPECT_TRUE(DMDRVI_KEY_UP > DMDRVI_KEY_RIGHT && DMDRVI_KEY_UP < DMDRVI_KEY_VENDOR_BASE);
     DMOD_TEST_EXPECT_TRUE(DMDRVI_KEY_LEFT_SHIFT < DMDRVI_KEY_VENDOR_BASE);
+    /* the codes of the keys a USB keyboard has none of are the same for every driver: they must not move */
+    DMOD_TEST_EXPECT_EQ(DMDRVI_KEY_SYM, 0x100u);
+    DMOD_TEST_EXPECT_EQ(DMDRVI_KEY_MIC, 0x101u);
+    DMOD_TEST_EXPECT_EQ(DMDRVI_KEY_DOLLAR, 0x102u);
 
     dmdrvi_key_events_t block = { 0 };
     DMOD_TEST_EXPECT_EQ(block.count, 0u);               /* nothing waits: count 0, not an error */
