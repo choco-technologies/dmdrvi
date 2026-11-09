@@ -36,7 +36,7 @@ _Static_assert(DMDRVI_GFX_PIXEL_FORMAT_ARGB8888 == 0 && DMDRVI_GFX_PIXEL_FORMAT_
                DMDRVI_GFX_PIXEL_FORMAT_COUNT == 6,
                "pixel formats must keep their values, new ones are appended");
 _Static_assert(DMDRVI_IOCTL_INPUT_GET_INFO >= 0x400 &&
-               DMDRVI_IOCTL_INPUT_WAIT_EVENT < DMDRVI_IOCTL_CUSTOM_BASE,
+               DMDRVI_IOCTL_INPUT_GET_LIGHT < 0x500,
                "input commands must stay in their own standard range");
 _Static_assert(DMDRVI_IOCTL_AUDIO_GET_INFO >= 0x500 &&
                DMDRVI_IOCTL_AUDIO_DRAIN < 0x600,
@@ -49,6 +49,14 @@ _Static_assert(DMDRVI_IOCTL_DEVFS_GET_FRIEND >= 0xF00 &&
                "device file system commands must stay in their own standard range");
 _Static_assert(sizeof(dmdrvi_input_contact_t) == 8,
                "input contacts must have no padding");
+_Static_assert(sizeof(dmdrvi_key_event_t) == 8 && offsetof(dmdrvi_key_event_t, code) == 4,
+               "key events must have no padding and a stable layout on 32/64-bit targets");
+_Static_assert(sizeof(dmdrvi_key_events_t) == 4 + 8 * DMDRVI_KEY_MAX_EVENTS,
+               "key events are read in blocks without padding");
+_Static_assert(sizeof(dmdrvi_key_config_t) == 8,
+               "key settings must have no padding");
+_Static_assert(DMDRVI_INPUT_TYPE_BUTTONS == 2 && DMDRVI_INPUT_TYPE_KEYBOARD == 3,
+               "input types must keep their values, new ones are appended");
 _Static_assert(sizeof(dmdrvi_input_state_t) == 12 + 8 * DMDRVI_INPUT_MAX_CONTACTS,
                "input states must have no padding, so they compare byte by byte");
 _Static_assert(sizeof(((dmdrvi_monitor_policy_t*)0)->event_handler) ==
@@ -132,6 +140,8 @@ DMOD_TEST_STEP(dmdrvi_monitor_commands_are_distinct)
         DMDRVI_IOCTL_GFX_GET_DISPLAY_ENABLED, DMDRVI_IOCTL_GFX_SET_BACKLIGHT, DMDRVI_IOCTL_GFX_GET_BACKLIGHT,
         DMDRVI_IOCTL_GFX_PRESENT,
         DMDRVI_IOCTL_INPUT_GET_INFO, DMDRVI_IOCTL_INPUT_GET_STATE, DMDRVI_IOCTL_INPUT_WAIT_EVENT,
+        DMDRVI_IOCTL_INPUT_KEY_READ, DMDRVI_IOCTL_INPUT_KEY_LISTEN, DMDRVI_IOCTL_INPUT_KEY_GET_CONFIG,
+        DMDRVI_IOCTL_INPUT_KEY_SET_CONFIG, DMDRVI_IOCTL_INPUT_SET_LIGHT, DMDRVI_IOCTL_INPUT_GET_LIGHT,
         DMDRVI_IOCTL_AUDIO_GET_INFO, DMDRVI_IOCTL_AUDIO_CONFIGURE,
         DMDRVI_IOCTL_AUDIO_SET_VOLUME, DMDRVI_IOCTL_AUDIO_SET_MUTE,
         DMDRVI_IOCTL_AUDIO_GET_STREAM, DMDRVI_IOCTL_AUDIO_START, DMDRVI_IOCTL_AUDIO_STOP,
@@ -186,4 +196,43 @@ DMOD_TEST_STEP(dmdrvi_input_states_compare_every_field)
     b = a;
     b.buttons = DMDRVI_INPUT_BUTTON_LEFT;
     DMOD_TEST_EXPECT_FALSE(dmdrvi_input_state_equal(&a, &b));
+}
+
+static int heard;
+
+static void count_key(void* context, const dmdrvi_key_event_t* event)
+{
+    *(int*)context += (event->action == DMDRVI_KEY_ACTION_DOWN);
+    heard++;
+}
+
+/* The key codes are the USB HID usages, the modifiers are separate bits, a listener is a handler and its context */
+DMOD_TEST_STEP(dmdrvi_key_events_describe_keys)
+{
+    DMOD_TEST_EXPECT_EQ(DMDRVI_KEY_A + 25u, DMDRVI_KEY_Z);
+    DMOD_TEST_EXPECT_EQ(DMDRVI_KEY_1 + 9u, DMDRVI_KEY_0);
+    DMOD_TEST_EXPECT_TRUE(DMDRVI_KEY_UP > DMDRVI_KEY_RIGHT && DMDRVI_KEY_UP < DMDRVI_KEY_VENDOR_BASE);
+
+    const uint8_t mods[] = { DMDRVI_KEY_MOD_SHIFT, DMDRVI_KEY_MOD_CTRL, DMDRVI_KEY_MOD_ALT,
+                             DMDRVI_KEY_MOD_SYM, DMDRVI_KEY_MOD_CAPS };
+    uint8_t all = 0;
+    for( int i = 0; i < 5; ++i )
+    {
+        DMOD_TEST_EXPECT_EQ(all & mods[i], 0);          /* one bit each */
+        all |= mods[i];
+    }
+
+    int downs = 0;
+    dmdrvi_key_listener_t listener = { count_key, &downs };
+    dmdrvi_key_event_t down = { 10u, DMDRVI_KEY_A, DMDRVI_KEY_ACTION_DOWN, DMDRVI_KEY_MOD_SHIFT };
+    dmdrvi_key_event_t up = { 20u, DMDRVI_KEY_A, DMDRVI_KEY_ACTION_UP, DMDRVI_KEY_MOD_SHIFT };
+    listener.handler(listener.context, &down);
+    listener.handler(listener.context, &up);
+    DMOD_TEST_EXPECT_EQ(downs, 1);
+    DMOD_TEST_EXPECT_EQ(heard, 2);
+
+    dmdrvi_key_events_t block = { 0 };
+    DMOD_TEST_EXPECT_EQ(block.count, 0u);               /* nothing waits: count 0, not an error */
+    block.events[DMDRVI_KEY_MAX_EVENTS - 1].code = DMDRVI_KEY_VENDOR_BASE;
+    DMOD_TEST_EXPECT_EQ(block.events[DMDRVI_KEY_MAX_EVENTS - 1].code, DMDRVI_KEY_VENDOR_BASE);
 }

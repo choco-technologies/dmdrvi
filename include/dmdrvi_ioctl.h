@@ -352,6 +352,7 @@ typedef enum
     DMDRVI_INPUT_TYPE_TOUCHSCREEN = 0,  /**< Contacts on top of a display */
     DMDRVI_INPUT_TYPE_MOUSE,            /**< Relative motion and buttons */
     DMDRVI_INPUT_TYPE_BUTTONS,          /**< Buttons or keys only */
+    DMDRVI_INPUT_TYPE_KEYBOARD,         /**< A keyboard: key events, see DMDRVI_INPUT_CAP_KEYS */
 
     DMDRVI_INPUT_TYPE_COUNT
 } dmdrvi_input_type_t;
@@ -376,6 +377,12 @@ typedef enum
 
 /** WAIT_EVENT is woken by an interrupt; without it the driver polls. */
 #define DMDRVI_INPUT_CAP_INTERRUPT           (1u << 6)
+
+/** Reports key events (DMDRVI_IOCTL_INPUT_KEY_*). A keyboard has no meaningful dmdrvi_input_state_t. */
+#define DMDRVI_INPUT_CAP_KEYS                (1u << 7)
+
+/** Has a light of its own (a keyboard backlight): DMDRVI_IOCTL_INPUT_SET_LIGHT. */
+#define DMDRVI_INPUT_CAP_LIGHT               (1u << 8)
 
 /** Bits of dmdrvi_input_state_t::buttons - bit n is button n. */
 #define DMDRVI_INPUT_BUTTON_LEFT             (1u << 0)
@@ -472,6 +479,157 @@ static inline bool dmdrvi_input_state_equal(const dmdrvi_input_state_t* a, const
  * arg: const uint32_t* - timeout in ms, or NULL to wait forever
  */
 #define DMDRVI_IOCTL_INPUT_WAIT_EVENT         0x402
+
+/*
+ * Keyboards.
+ *
+ * A keyboard reports EVENTS, not a state: a state loses a key that went down and up
+ * while the reader was busy (an e-paper refresh takes 700 ms), an event does not.
+ *
+ * A driver collects the events (from an interrupt: it wakes its task, which reads the
+ * chip) and hands each of them to every consumer of the device. A consumer is
+ *  - a LISTENER (DMDRVI_IOCTL_INPUT_KEY_LISTEN): its handler is called, in the task of
+ *    the driver, for each event as it happens. It must return at once - what takes
+ *    time (drawing) is for the consumer's own thread. A listener has no queue.
+ *  - an open node: it reads the events with read() / DMDRVI_IOCTL_INPUT_KEY_READ, waits
+ *    for them with DMDRVI_IOCTL_INPUT_WAIT_EVENT. Each open has a queue of its own.
+ *
+ * Nothing is kept for nobody: with no listener and no open node an event is dropped,
+ * so what a consumer finds when it starts is nothing, never the history of the
+ * minutes before. The queue of an open is
+ *  - small: dmdrvi_key_config_t::queue_depth events, when it is full the OLDEST is
+ *    dropped (the last keys matter most),
+ *  - empty when the node is opened,
+ *  - without events older than dmdrvi_key_config_t::max_age_ms (a reader that wakes
+ *    late does not see them; 0 = no limit).
+ * A dropped event could be the one that releases a key. After any drop the next event
+ * the consumer gets is DMDRVI_KEY_RESET: forget the keys held down; `modifiers` of it
+ * are the real ones.
+ *
+ * A key code is a USB HID keyboard usage (page 0x07: A is 0x04, Enter 0x28, ...), for
+ * keys that have none (Sym, a microphone key) a code from DMDRVI_KEY_VENDOR_BASE on. It
+ * is the place of the key, not the character: shift, alt and sym (the layers of a
+ * small keyboard) and the layout of a language are the job of the code above the
+ * driver.
+ */
+
+/** Keys that are not on a USB keyboard have codes from here on (a driver documents its own). */
+#define DMDRVI_KEY_VENDOR_BASE               0x100u
+
+/** Some USB HID usages (letters: DMDRVI_KEY_A + n, digits: DMDRVI_KEY_1 .. DMDRVI_KEY_9, DMDRVI_KEY_0). */
+#define DMDRVI_KEY_A                         0x04u
+#define DMDRVI_KEY_Z                         0x1Du
+#define DMDRVI_KEY_1                         0x1Eu
+#define DMDRVI_KEY_0                         0x27u
+#define DMDRVI_KEY_ENTER                     0x28u
+#define DMDRVI_KEY_ESCAPE                    0x29u
+#define DMDRVI_KEY_BACKSPACE                 0x2Au
+#define DMDRVI_KEY_TAB                       0x2Bu
+#define DMDRVI_KEY_SPACE                     0x2Cu
+#define DMDRVI_KEY_DELETE                    0x4Cu
+#define DMDRVI_KEY_RIGHT                     0x4Fu
+#define DMDRVI_KEY_LEFT                      0x50u
+#define DMDRVI_KEY_DOWN                      0x51u
+#define DMDRVI_KEY_UP                        0x52u
+
+/** Bits of dmdrvi_key_event_t::modifiers: the modifier keys held down (CAPS: the lock is on). */
+#define DMDRVI_KEY_MOD_SHIFT                 (1u << 0)
+#define DMDRVI_KEY_MOD_CTRL                  (1u << 1)
+#define DMDRVI_KEY_MOD_ALT                   (1u << 2)
+#define DMDRVI_KEY_MOD_SYM                   (1u << 3)
+#define DMDRVI_KEY_MOD_CAPS                  (1u << 4)
+
+/** What happened to a key. */
+typedef enum
+{
+    DMDRVI_KEY_ACTION_DOWN = 0,     /**< Has just gone down */
+    DMDRVI_KEY_ACTION_UP,           /**< Has just been released */
+    DMDRVI_KEY_ACTION_REPEAT,       /**< Still down: repeated (see dmdrvi_key_config_t) */
+    DMDRVI_KEY_ACTION_RESET,        /**< Events were dropped: no key is held, `modifiers` are the real ones (code 0) */
+} dmdrvi_key_action_t;
+
+/** One key event. */
+typedef struct
+{
+    uint32_t time_ms;       /**< When it happened (a monotonic clock, ms) */
+    uint16_t code;          /**< The key: a USB HID usage or DMDRVI_KEY_VENDOR_BASE + n */
+    uint8_t  action;        /**< dmdrvi_key_action_t */
+    uint8_t  modifiers;     /**< DMDRVI_KEY_MOD_* when it happened (for a modifier key: with its own effect) */
+} dmdrvi_key_event_t;
+
+/** Most events one DMDRVI_IOCTL_INPUT_KEY_READ returns. */
+#define DMDRVI_KEY_MAX_EVENTS                16u
+
+/** Events taken from the queue of an open node, oldest first. */
+typedef struct
+{
+    uint32_t           count;                        /**< How many of `events` are valid, 0: nothing waits */
+    dmdrvi_key_event_t events[DMDRVI_KEY_MAX_EVENTS];
+} dmdrvi_key_events_t;
+
+/** What a listener is: called in the task of the driver for each event, must return at once. */
+typedef void (*dmdrvi_key_handler_t)(void* context, const dmdrvi_key_event_t* event);
+
+typedef struct
+{
+    dmdrvi_key_handler_t handler;   /**< NULL: remove the listener of this `context` */
+    void*                context;   /**< Passed to the handler; with `handler` it identifies the listener */
+} dmdrvi_key_listener_t;
+
+/** Auto-repeat and queues. A driver that cannot honour a value returns -EINVAL and changes nothing. */
+typedef struct
+{
+    uint16_t repeat_delay_ms;       /**< A key held this long starts repeating, 0: no repeat */
+    uint16_t repeat_period_ms;      /**< Time between repeats */
+    uint16_t max_age_ms;            /**< An event older than this is not handed to a reader, 0: no limit */
+    uint8_t  queue_depth;           /**< Events kept for an open node, 1 .. DMDRVI_KEY_MAX_EVENTS */
+    uint8_t  reserved;
+} dmdrvi_key_config_t;
+
+/**
+ * Take the events that waited for this open node: never blocks (wait with
+ * DMDRVI_IOCTL_INPUT_WAIT_EVENT), count 0 when there are none. read() of a keyboard
+ * node is the same; GET_STATE of a keyboard returns -ENOTSUP.
+ *
+ * arg: dmdrvi_key_events_t* - output buffer
+ */
+#define DMDRVI_IOCTL_INPUT_KEY_READ           0x403
+
+/**
+ * Add or remove (handler NULL) a listener. At most a few: -ENOMEM when there are too
+ * many, -EEXIST for a listener that is registered already.
+ *
+ * arg: const dmdrvi_key_listener_t*
+ */
+#define DMDRVI_IOCTL_INPUT_KEY_LISTEN         0x404
+
+/**
+ * Read the repeat and queue settings.
+ *
+ * arg: dmdrvi_key_config_t* - output buffer
+ */
+#define DMDRVI_IOCTL_INPUT_KEY_GET_CONFIG     0x405
+
+/**
+ * Change the repeat and queue settings (they hold for every consumer).
+ *
+ * arg: const dmdrvi_key_config_t*
+ */
+#define DMDRVI_IOCTL_INPUT_KEY_SET_CONFIG     0x406
+
+/**
+ * Light of the keyboard (DMDRVI_INPUT_CAP_LIGHT), in percent, 0 = off.
+ *
+ * arg: const uint8_t* (0..100)
+ */
+#define DMDRVI_IOCTL_INPUT_SET_LIGHT          0x407
+
+/**
+ * Read the light of the keyboard.
+ *
+ * arg: uint8_t* - output buffer
+ */
+#define DMDRVI_IOCTL_INPUT_GET_LIGHT          0x408
 
 /*
  * Audio (0x500 range). 0x500..0x503 are the analog controls of a codec:
