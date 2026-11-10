@@ -1,6 +1,7 @@
 #define DMOD_ENABLE_REGISTRATION ON
 #define ENABLE_DIF_REGISTRATIONS
 
+#include <stddef.h>
 #include "dmod_test.h"
 #include "dmdrvi.h"
 
@@ -47,6 +48,11 @@ _Static_assert(DMDRVI_IOCTL_WIFI_GET_INFO >= 0x700 &&
 _Static_assert(DMDRVI_IOCTL_DEVFS_GET_FRIEND >= 0xF00 &&
                DMDRVI_IOCTL_DEVFS_GET_FRIEND < DMDRVI_IOCTL_CUSTOM_BASE,
                "device file system commands must stay in their own standard range");
+/* what a driver written before the layout existed fills is where it was: the new fields are at the end */
+_Static_assert(offsetof(dmdrvi_input_info_t, layout) > offsetof(dmdrvi_input_info_t, button_count) &&
+               offsetof(dmdrvi_input_info_t, module) == offsetof(dmdrvi_input_info_t, layout) + DMDRVI_INPUT_LAYOUT_MAX &&
+               sizeof(dmdrvi_input_info_t) >= offsetof(dmdrvi_input_info_t, module) + DMDRVI_INPUT_MODULE_MAX,
+               "the layout and the module of a keyboard are appended to dmdrvi_input_info_t");
 _Static_assert(sizeof(dmdrvi_input_contact_t) == 8,
                "input contacts must have no padding");
 _Static_assert(sizeof(dmdrvi_devfs_group_t) == DMDRVI_DEVFS_GROUP_NAME_MAX,

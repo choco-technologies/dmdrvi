@@ -346,6 +346,10 @@ typedef struct
 /** Longest device name in dmdrvi_input_info_t, including the terminator. */
 #define DMDRVI_INPUT_NAME_MAX                16u
 
+/** Longest layout and module name in dmdrvi_input_info_t, including the terminator. */
+#define DMDRVI_INPUT_LAYOUT_MAX              32u
+#define DMDRVI_INPUT_MODULE_MAX              32u
+
 /** Kind of input device. */
 typedef enum
 {
@@ -407,6 +411,14 @@ typedef struct
     uint16_t            height;         /**< Contact y is 0..height-1, 0 = unknown */
     uint8_t             max_contacts;   /**< Simultaneous contacts, <= DMDRVI_INPUT_MAX_CONTACTS */
     uint8_t             button_count;   /**< Number of buttons, <= 32 */
+    /**
+     * Keyboards: the layout of the keys, a name ("compact", "numeric", "full", or one of the driver's own). The code that
+     * reads the events (libinput) looks for the file <name>.ini first among the files the module `module` ships
+     * (cfg/layouts/<module>/), then among its own. Empty: an ordinary keyboard ("full"). A driver without it leaves it empty.
+     */
+    char                layout[DMDRVI_INPUT_LAYOUT_MAX];
+    /** The name of the module of the driver (where its layout files are); empty when it has none. */
+    char                module[DMDRVI_INPUT_MODULE_MAX];
 } dmdrvi_input_info_t;
 
 /** One contact (finger, stylus), in screen coordinates. */

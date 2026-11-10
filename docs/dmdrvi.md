@@ -240,6 +240,14 @@ kind (`DMDRVI_INPUT_TYPE_TOUCHSCREEN`, `_MOUSE`, `_BUTTONS`, `_KEYBOARD`), the
 `DMDRVI_INPUT_CAP_*` bits, the coordinate range of contacts (`width` x
 `height`, 0 = unknown), `max_contacts` and `button_count`.
 
+A keyboard also says its **`layout`** - which keys it has and how they behave (`"compact"` for a
+small phone-like keyboard with a Sym key, `"numeric"`, `"full"`, or a name of its own) - and the
+**`module`** of its driver. The reader (libinput) looks for `<layout>.ini` first among the files the
+module ships (`cfg/layouts/<module>/`), then among its own; so a driver with a layout nobody else
+has brings the file with it, and may extend a ready one (`extends=compact` in the file). Both are
+empty for a device that is an ordinary keyboard, and a driver written before they were added leaves
+them empty (the caller zeroes the structure first).
+
 | Capability | The device |
 |------------|------------|
 | `DMDRVI_INPUT_CAP_CONTACTS` | Reports contacts with screen coordinates |
