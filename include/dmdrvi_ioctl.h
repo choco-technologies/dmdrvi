@@ -999,8 +999,8 @@ typedef struct
  *
  * Off: the connection is dropped and the network forgotten (as by DISCONNECT), the radio stops, GET_STATUS reports
  * DMDRVI_WIFI_STATE_OFF, the link is down, and CONNECT and SCAN fail with -ENODEV. On: the radio starts again (GET_STATUS:
- * DMDRVI_WIFI_STATE_IDLE); nothing connects by itself - a service that keeps the node connected (wifid) does, a client does with
- * CONNECT. The node and its interface stay registered. A driver starts with the radio on.
+ * DMDRVI_WIFI_STATE_IDLE, or _STARTING for a moment when a thread of the driver brings it up); nothing connects by itself - a service
+ * that keeps the node connected (wifid) does, a client does with CONNECT. The node and its interface stay registered. A driver starts with the radio on.
  * @param arg Input pointer to a const int: 0 off, anything else on. Switching to the state the radio is in is not an error.
  * @return 0, -EBUSY while the radio is being started, -ENODEV when there is no radio to switch (it did not start), -ENOTSUP for a
  * driver that cannot switch it off, or another negative errno-compatible code.
