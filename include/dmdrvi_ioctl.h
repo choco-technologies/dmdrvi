@@ -879,7 +879,7 @@ typedef struct
 /** @brief Where the Wi-Fi of a node is. */
 typedef enum
 {
-    DMDRVI_WIFI_STATE_OFF = 0,          /**< The radio is not there (yet), or was lost. */
+    DMDRVI_WIFI_STATE_OFF = 0,          /**< The radio is not there (yet), was lost, or is switched off (DMDRVI_IOCTL_WIFI_SET_ENABLED). */
     DMDRVI_WIFI_STATE_STARTING,         /**< The radio is being started. */
     DMDRVI_WIFI_STATE_IDLE,             /**< Started, not connected to a network. */
     DMDRVI_WIFI_STATE_CONNECTING,       /**< Connecting (again) to the network set. */
@@ -993,6 +993,19 @@ typedef struct
  * negative errno-compatible code.
  */
 #define DMDRVI_IOCTL_WIFI_SCAN                0x704
+
+/**
+ * @brief Switch the radio on or off, like the Wi-Fi switch of a phone.
+ *
+ * Off: the connection is dropped and the network forgotten (as by DISCONNECT), the radio stops, GET_STATUS reports
+ * DMDRVI_WIFI_STATE_OFF, the link is down, and CONNECT and SCAN fail with -ENODEV. On: the radio starts again (GET_STATUS:
+ * DMDRVI_WIFI_STATE_IDLE, or _STARTING for a moment when a thread of the driver brings it up); nothing connects by itself - a service
+ * that keeps the node connected (wifid) does, a client does with CONNECT. The node and its interface stay registered. A driver starts with the radio on.
+ * @param arg Input pointer to a const int: 0 off, anything else on. Switching to the state the radio is in is not an error.
+ * @return 0, -EBUSY while the radio is being started, -ENODEV when there is no radio to switch (it did not start), -ENOTSUP for a
+ * driver that cannot switch it off, or another negative errno-compatible code.
+ */
+#define DMDRVI_IOCTL_WIFI_SET_ENABLED         0x705
 
 /*
  * Device file system commands (0xF00 range) - answered by the file system

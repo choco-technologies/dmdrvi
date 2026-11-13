@@ -43,7 +43,7 @@ _Static_assert(DMDRVI_IOCTL_AUDIO_GET_INFO >= 0x500 &&
                DMDRVI_IOCTL_AUDIO_DRAIN < 0x600,
                "audio commands must stay in their own standard range");
 _Static_assert(DMDRVI_IOCTL_WIFI_GET_INFO >= 0x700 &&
-               DMDRVI_IOCTL_WIFI_SCAN < 0x800,
+               DMDRVI_IOCTL_WIFI_SET_ENABLED < 0x800,
                "Wi-Fi commands must stay in their own standard range");
 _Static_assert(DMDRVI_IOCTL_DEVFS_GET_FRIEND >= 0xF00 &&
                DMDRVI_IOCTL_DEVFS_GET_FRIEND < DMDRVI_IOCTL_CUSTOM_BASE,
@@ -156,7 +156,7 @@ DMOD_TEST_STEP(dmdrvi_monitor_commands_are_distinct)
         DMDRVI_IOCTL_RTC_GET_TIME, DMDRVI_IOCTL_RTC_SET_TIME,
         DMDRVI_IOCTL_RTC_GET_STATUS, DMDRVI_IOCTL_RTC_GET_INFO, DMDRVI_IOCTL_RTC_INVALIDATE,
         DMDRVI_IOCTL_WIFI_GET_INFO, DMDRVI_IOCTL_WIFI_GET_STATUS, DMDRVI_IOCTL_WIFI_CONNECT,
-        DMDRVI_IOCTL_WIFI_DISCONNECT, DMDRVI_IOCTL_WIFI_SCAN,
+        DMDRVI_IOCTL_WIFI_DISCONNECT, DMDRVI_IOCTL_WIFI_SCAN, DMDRVI_IOCTL_WIFI_SET_ENABLED,
     };
     const int count = (int)(sizeof(commands) / sizeof(commands[0]));
     int duplicates = 0;

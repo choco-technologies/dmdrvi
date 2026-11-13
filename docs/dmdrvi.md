@@ -405,6 +405,7 @@ the node, so one tool serves every Wi-Fi driver.
 | `DMDRVI_IOCTL_WIFI_CONNECT` | `const dmdrvi_wifi_connect_t*` | connect and stay on the network (again whenever lost); returns without waiting |
 | `DMDRVI_IOCTL_WIFI_DISCONNECT` | `NULL` | disconnect and forget the network |
 | `DMDRVI_IOCTL_WIFI_SCAN` | `dmdrvi_wifi_scan_t*` | scan; waits for it (a few seconds); the caller gives room for `max` networks |
+| `DMDRVI_IOCTL_WIFI_SET_ENABLED` | `const int*` | the Wi-Fi switch: 0 stops the radio (the network is dropped and forgotten, the state is `OFF`, `CONNECT` and `SCAN` fail with `-ENODEV`), anything else starts it (`IDLE`, or `STARTING` for a moment; nothing connects by itself). The node and the interface stay; a driver starts with the radio on |
 
 `CONNECT` is asynchronous: poll `GET_STATUS` until the state is
 `DMDRVI_WIFI_STATE_CONNECTED`. The `reason` of the status is the driver's own
