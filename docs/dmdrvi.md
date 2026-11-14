@@ -414,6 +414,29 @@ does not know yet (`chip` before the radio is reached) with an empty string.
 The address of the interface is not Wi-Fi's: it is the network stack's
 (DHCP, `ifconfig`) as for any interface.
 
+### Cellular Modem Ioctl Commands
+
+A cellular modem node (LTE, GSM, with a SIM) answers the `DMDRVI_IOCTL_MODEM_*` commands (0x800 range). A client (the `modem` tool, a
+messaging service, the settings) uses them without knowing which module or which command set is behind the node. The driver hides the encoding of
+a message (GSM 7-bit or UCS-2), the splitting of a long one and the putting of received parts together: a message is the user's text, in UTF-8.
+
+| Command | Argument | |
+|---------|----------|--|
+| `DMDRVI_IOCTL_MODEM_GET_INFO` | `dmdrvi_modem_info_t*` | driver, profile, manufacturer, model, firmware, IMEI, restarts |
+| `DMDRVI_IOCTL_MODEM_GET_STATUS` | `dmdrvi_modem_status_t*` | power, SIM, registration, technology, signal (dBm and bars), the network, the SMS center, the last error |
+| `DMDRVI_IOCTL_MODEM_SET_ENABLED` | `const int*` | power the module on or off (the node stays) |
+| `DMDRVI_IOCTL_MODEM_SET_PIN` | `const dmdrvi_modem_pin_t*` | the PIN of the SIM (or the PUK and a new PIN) |
+| `DMDRVI_IOCTL_MODEM_AT` | `dmdrvi_modem_at_t*` | a command of the module as it is, with its answer (diagnostics) |
+| `DMDRVI_IOCTL_MODEM_SMS_SEND` | `dmdrvi_modem_sms_send_t*` | send a message; returns when the network took it |
+| `DMDRVI_IOCTL_MODEM_SMS_LIST` | `dmdrvi_modem_sms_list_t*` | the messages in the modem's storage (all, or the unread) |
+| `DMDRVI_IOCTL_MODEM_SMS_READ` | `dmdrvi_modem_sms_t*` | one message: the sender, the time, the text; it becomes read |
+| `DMDRVI_IOCTL_MODEM_SMS_DELETE` | `const uint16_t*` | one message (all its parts), or all the read ones |
+| `DMDRVI_IOCTL_MODEM_WAIT_EVENT` | `dmdrvi_modem_wait_t*` | wait (a timeout) for a message or a change of the status |
+
+A module takes seconds to start and the SIM and the network some more: `GET_STATUS` says where it is (`power`, `sim`, `registration`), and
+`SMS_SEND` fails with `-EACCES` / `-ENOTCONN` until the SIM is ready and the modem is registered. A message of several parts has the index of its
+first part; deleting it deletes all of them.
+
 ### Device File System Ioctl Commands
 
 Commands in the 0xF00 range are answered by the file system that exposes

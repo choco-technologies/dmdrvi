@@ -1008,6 +1008,227 @@ typedef struct
 #define DMDRVI_IOCTL_WIFI_SET_ENABLED         0x705
 
 /*
+ * Cellular modem (0x800 range) - implemented by the node of a cellular modem (LTE, GSM) that has a SIM: what the modem is, where it is on
+ * the network, short messages (SMS). A client (the shell's modem tool, a messaging service, the settings) uses them without knowing which
+ * module or which command set is behind the node. The driver hides the encoding of a message (GSM 7-bit, UCS-2), the splitting of a long one
+ * into parts and the putting of the received parts together: a message here is the text of the user, in UTF-8.
+ */
+
+#define DMDRVI_MODEM_NAME_MAX       32  /**< Longest driver / manufacturer / model / firmware / operator text, with the terminator. */
+#define DMDRVI_MODEM_IMEI_MAX       16  /**< The IMEI: 15 digits and the terminator. */
+#define DMDRVI_MODEM_NUMBER_MAX     24  /**< A telephone number: "+" and at most 20 digits ("48123456789" too), with the terminator. */
+#define DMDRVI_MODEM_PIN_MAX        9   /**< A PIN or a PUK: 4 to 8 digits, with the terminator. */
+#define DMDRVI_MODEM_INDEX_NONE     0xFFFF  /**< No message / all of them. */
+
+/** @brief Whether the module is powered and answers. */
+typedef enum
+{
+    DMDRVI_MODEM_POWER_OFF = 0,         /**< Not powered (switched off with DMDRVI_IOCTL_MODEM_SET_ENABLED, or not started yet). */
+    DMDRVI_MODEM_POWER_STARTING,        /**< Powered, not answering yet (a module takes seconds to start). */
+    DMDRVI_MODEM_POWER_READY,           /**< It answers: info and status are valid. */
+} dmdrvi_modem_power_t;
+
+/** @brief The SIM. */
+typedef enum
+{
+    DMDRVI_MODEM_SIM_UNKNOWN = 0,       /**< Not asked yet. */
+    DMDRVI_MODEM_SIM_ABSENT,            /**< No card. */
+    DMDRVI_MODEM_SIM_PIN,               /**< It waits for the PIN (DMDRVI_IOCTL_MODEM_SET_PIN). */
+    DMDRVI_MODEM_SIM_PUK,               /**< Blocked: it waits for the PUK and a new PIN. */
+    DMDRVI_MODEM_SIM_READY,             /**< Usable. */
+    DMDRVI_MODEM_SIM_ERROR,             /**< The card is not usable (damaged, locked by the network). */
+} dmdrvi_modem_sim_t;
+
+/** @brief Where the modem is on the network. */
+typedef enum
+{
+    DMDRVI_MODEM_REG_NONE = 0,          /**< Not registered and not searching (no SIM, the radio is off). */
+    DMDRVI_MODEM_REG_SEARCHING,         /**< Searching for a network. */
+    DMDRVI_MODEM_REG_DENIED,            /**< The network refused it. */
+    DMDRVI_MODEM_REG_UNKNOWN,           /**< The module cannot tell. */
+    DMDRVI_MODEM_REG_HOME,              /**< Registered on the network of the SIM. */
+    DMDRVI_MODEM_REG_ROAMING,           /**< Registered on another network. */
+} dmdrvi_modem_registration_t;
+
+/** @brief The radio access technology in use. */
+typedef enum
+{
+    DMDRVI_MODEM_RAT_UNKNOWN = 0,
+    DMDRVI_MODEM_RAT_GSM,
+    DMDRVI_MODEM_RAT_UMTS,
+    DMDRVI_MODEM_RAT_LTE,
+} dmdrvi_modem_rat_t;
+
+/** @brief What is behind the node: DMDRVI_IOCTL_MODEM_GET_INFO. Texts are terminated; what the driver does not know is empty. */
+typedef struct
+{
+    char        driver[DMDRVI_MODEM_NAME_MAX];          /**< The driver, e.g. "dmmodem". */
+    char        profile[DMDRVI_MODEM_NAME_MAX];         /**< The profile of the module it was given, e.g. "a7682e". */
+    char        manufacturer[DMDRVI_MODEM_NAME_MAX];    /**< As the module says ("" until it answers). */
+    char        model[DMDRVI_MODEM_NAME_MAX];
+    char        firmware[DMDRVI_MODEM_NAME_MAX];
+    char        imei[DMDRVI_MODEM_IMEI_MAX];
+    uint32_t    resets;                                 /**< Times the module was (re)started. */
+} dmdrvi_modem_info_t;
+
+/** @brief The modem now: DMDRVI_IOCTL_MODEM_GET_STATUS. */
+typedef struct
+{
+    uint8_t     power;                                  /**< dmdrvi_modem_power_t */
+    uint8_t     sim;                                    /**< dmdrvi_modem_sim_t */
+    uint8_t     registration;                           /**< dmdrvi_modem_registration_t */
+    uint8_t     rat;                                    /**< dmdrvi_modem_rat_t */
+    int16_t     rssi;                                   /**< dBm, 0: not known. */
+    uint8_t     bars;                                   /**< 0..5 for the display. */
+    uint8_t     reserved;
+    uint16_t    error;                                  /**< The last error of the module (+CME ERROR / +CMS ERROR), 0: none. */
+    char        operator_name[DMDRVI_MODEM_NAME_MAX];   /**< The network ("" when not registered). */
+    char        smsc[DMDRVI_MODEM_NUMBER_MAX];          /**< The service center of short messages ("" not known). */
+} dmdrvi_modem_status_t;
+
+/** @brief A command of the module as it is (diagnostics): DMDRVI_IOCTL_MODEM_AT. */
+typedef struct
+{
+    const char *command;                /**< In: the line without the end of line, e.g. "AT+CSQ". */
+    char       *response;               /**< In: room for what the module answers (the lines, terminated), NULL for none. */
+    uint32_t    size;                   /**< In: the size of `response`. */
+    uint32_t    timeout_ms;             /**< In: how long to wait for the final result (0: the default of the profile). */
+    uint32_t    length;                 /**< Out: the length of the answer (it is cut to `size`). */
+} dmdrvi_modem_at_t;
+
+/** @brief The PIN of the SIM: DMDRVI_IOCTL_MODEM_SET_PIN. With a PUK, `pin` is the PUK and `new_pin` the PIN to set. */
+typedef struct
+{
+    char        pin[DMDRVI_MODEM_PIN_MAX];
+    char        new_pin[DMDRVI_MODEM_PIN_MAX];      /**< "" when `pin` is a PIN. */
+} dmdrvi_modem_pin_t;
+
+/** @brief A short message to send: DMDRVI_IOCTL_MODEM_SMS_SEND. */
+typedef struct
+{
+    char        number[DMDRVI_MODEM_NUMBER_MAX];    /**< The receiver. */
+    const char *text;                               /**< UTF-8; a long one is sent as several parts. */
+    uint16_t    parts;                              /**< Out: how many were sent. */
+} dmdrvi_modem_sms_send_t;
+
+/** @brief Which messages DMDRVI_IOCTL_MODEM_SMS_LIST lists. */
+typedef enum
+{
+    DMDRVI_MODEM_SMS_ALL = 0,
+    DMDRVI_MODEM_SMS_UNREAD,
+} dmdrvi_modem_sms_filter_t;
+
+/** @brief The messages in the storage of the modem: DMDRVI_IOCTL_MODEM_SMS_LIST. */
+typedef struct
+{
+    uint8_t     filter;                 /**< In: dmdrvi_modem_sms_filter_t. */
+    uint16_t   *indexes;                /**< In: room for `max` indexes. A message of several parts has the index of its first part. */
+    uint16_t    max;                    /**< In. */
+    uint16_t    count;                  /**< Out: how many were stored (at most max). */
+} dmdrvi_modem_sms_list_t;
+
+/** @brief A received message: DMDRVI_IOCTL_MODEM_SMS_READ. */
+typedef struct
+{
+    uint16_t    index;                              /**< In: of DMDRVI_IOCTL_MODEM_SMS_LIST. */
+    uint8_t     unread;                             /**< Out: it was not read before this. */
+    uint8_t     reserved;
+    char        number[DMDRVI_MODEM_NUMBER_MAX];    /**< Out: the sender. */
+    int64_t     time;                               /**< Out: seconds since 1970 (UTC), 0: not known. */
+    char       *text;                               /**< In: room for the text (UTF-8, terminated). */
+    uint32_t    text_size;                          /**< In. */
+    uint32_t    text_length;                        /**< Out: its length (it is cut to the room). */
+} dmdrvi_modem_sms_t;
+
+/** @brief What DMDRVI_IOCTL_MODEM_WAIT_EVENT tells. */
+#define DMDRVI_MODEM_EVENT_SMS_RECEIVED     0x01u   /**< A message came. */
+#define DMDRVI_MODEM_EVENT_STATUS           0x02u   /**< The status changed (the network, the SIM, the power). */
+
+/** @brief DMDRVI_IOCTL_MODEM_WAIT_EVENT. */
+typedef struct
+{
+    uint32_t    timeout_ms;             /**< In: how long to wait (0: do not wait). */
+    uint32_t    events;                 /**< Out: DMDRVI_MODEM_EVENT_* that happened since the last call; 0: none (timed out). */
+} dmdrvi_modem_wait_t;
+
+/**
+ * @brief Read what is behind the node.
+ * @param arg Output pointer to dmdrvi_modem_info_t.
+ * @return 0 on success, or a negative errno-compatible code.
+ */
+#define DMDRVI_IOCTL_MODEM_GET_INFO           0x800
+
+/**
+ * @brief Read the state of the modem.
+ * @param arg Output pointer to dmdrvi_modem_status_t.
+ * @return 0 on success, or a negative errno-compatible code.
+ */
+#define DMDRVI_IOCTL_MODEM_GET_STATUS         0x801
+
+/**
+ * @brief Power the module on or off (what a phone calls the airplane mode, and a little more: the module is switched off).
+ *
+ * Off: the module is shut down, GET_STATUS reports DMDRVI_MODEM_POWER_OFF, and everything below fails with -ENODEV. On: the module is
+ * started (POWER_STARTING for a few seconds, then POWER_READY). A driver starts with the module on when its configuration says so.
+ * @param arg Input pointer to a const int: 0 off, anything else on. Switching to the state it is in is not an error.
+ * @return 0, -EBUSY while the module is being started or shut down, -ENOTSUP when it cannot be switched, or another negative code.
+ */
+#define DMDRVI_IOCTL_MODEM_SET_ENABLED        0x802
+
+/**
+ * @brief Enter the PIN of the SIM (or its PUK with a new PIN).
+ * @param arg Input pointer to const dmdrvi_modem_pin_t.
+ * @return 0 when the SIM took it (it may take seconds to be ready: poll GET_STATUS), -EINVAL for a malformed one, -EACCES for a wrong one,
+ * -EPERM when the SIM does not wait for a PIN, or another negative code.
+ */
+#define DMDRVI_IOCTL_MODEM_SET_PIN            0x803
+
+/**
+ * @brief Send a command of the module as it is and read what it answers (diagnostics: the commands of one module are not those of another).
+ * @param arg dmdrvi_modem_at_t.
+ * @return 0 when the module answered OK, -EIO for ERROR / +CME ERROR / +CMS ERROR (the answer is there, GET_STATUS has the code),
+ * -ETIMEDOUT, -EBUSY while another command is running, -ENODEV when the module is off.
+ */
+#define DMDRVI_IOCTL_MODEM_AT                 0x804
+
+/**
+ * @brief Send a short message. Returns when the network took it (seconds; up to a minute).
+ * @param arg dmdrvi_modem_sms_send_t.
+ * @return 0, -EINVAL for a malformed number or no text, -EMSGSIZE for a text of more than the parts the driver sends, -EACCES while the
+ * SIM is not ready, -ENOTCONN while it is not registered, -EIO when the network refused it (GET_STATUS has the code), -ETIMEDOUT,
+ * -ENODEV when the module is off.
+ */
+#define DMDRVI_IOCTL_MODEM_SMS_SEND           0x810
+
+/**
+ * @brief List the messages the modem keeps.
+ * @param arg dmdrvi_modem_sms_list_t: the room in, the count out.
+ * @return 0, or a negative errno-compatible code.
+ */
+#define DMDRVI_IOCTL_MODEM_SMS_LIST           0x811
+
+/**
+ * @brief Read a message; it becomes read.
+ * @param arg dmdrvi_modem_sms_t: the index in, the message out.
+ * @return 0, -ENOENT when there is no such message, or a negative errno-compatible code.
+ */
+#define DMDRVI_IOCTL_MODEM_SMS_READ           0x812
+
+/**
+ * @brief Delete a message (all the parts of it).
+ * @param arg Input pointer to a const uint16_t: the index; DMDRVI_MODEM_INDEX_NONE deletes all the messages that were read.
+ * @return 0, -ENOENT when there is no such message, or a negative errno-compatible code.
+ */
+#define DMDRVI_IOCTL_MODEM_SMS_DELETE         0x813
+
+/**
+ * @brief Wait for something to happen (a message came, the status changed), so a service does not poll.
+ * @param arg dmdrvi_modem_wait_t.
+ * @return 0 (`events` is 0 when it timed out), or a negative errno-compatible code.
+ */
+#define DMDRVI_IOCTL_MODEM_WAIT_EVENT         0x820
+
+/*
  * Device file system commands (0xF00 range) - answered by the file system
  * that exposes the node (dmdevfs), never passed to the driver. They give
  * everybody, not only drivers (dmdrvi_friend_changed()), access to what the
