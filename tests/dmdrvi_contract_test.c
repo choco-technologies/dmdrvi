@@ -45,6 +45,11 @@ _Static_assert(DMDRVI_IOCTL_AUDIO_GET_INFO >= 0x500 &&
 _Static_assert(DMDRVI_IOCTL_WIFI_GET_INFO >= 0x700 &&
                DMDRVI_IOCTL_WIFI_SET_ENABLED < 0x800,
                "Wi-Fi commands must stay in their own standard range");
+_Static_assert(DMDRVI_IOCTL_MODEM_GET_INFO >= 0x800 &&
+               DMDRVI_IOCTL_MODEM_WAIT_EVENT < 0x900,
+               "modem commands must stay in their own standard range");
+_Static_assert(DMDRVI_MODEM_NUMBER_MAX >= 22 && DMDRVI_MODEM_IMEI_MAX == 16 && DMDRVI_MODEM_PIN_MAX == 9,
+               "a number has '+' and up to 20 digits; an IMEI has 15; a PIN or PUK 4 to 8");
 _Static_assert(DMDRVI_IOCTL_DEVFS_GET_FRIEND >= 0xF00 &&
                DMDRVI_IOCTL_DEVFS_GET_FRIEND < DMDRVI_IOCTL_CUSTOM_BASE,
                "device file system commands must stay in their own standard range");
@@ -157,6 +162,10 @@ DMOD_TEST_STEP(dmdrvi_monitor_commands_are_distinct)
         DMDRVI_IOCTL_RTC_GET_STATUS, DMDRVI_IOCTL_RTC_GET_INFO, DMDRVI_IOCTL_RTC_INVALIDATE,
         DMDRVI_IOCTL_WIFI_GET_INFO, DMDRVI_IOCTL_WIFI_GET_STATUS, DMDRVI_IOCTL_WIFI_CONNECT,
         DMDRVI_IOCTL_WIFI_DISCONNECT, DMDRVI_IOCTL_WIFI_SCAN, DMDRVI_IOCTL_WIFI_SET_ENABLED,
+        DMDRVI_IOCTL_MODEM_GET_INFO, DMDRVI_IOCTL_MODEM_GET_STATUS, DMDRVI_IOCTL_MODEM_SET_ENABLED,
+        DMDRVI_IOCTL_MODEM_SET_PIN, DMDRVI_IOCTL_MODEM_AT, DMDRVI_IOCTL_MODEM_SMS_SEND,
+        DMDRVI_IOCTL_MODEM_SMS_LIST, DMDRVI_IOCTL_MODEM_SMS_READ, DMDRVI_IOCTL_MODEM_SMS_DELETE,
+        DMDRVI_IOCTL_MODEM_WAIT_EVENT,
     };
     const int count = (int)(sizeof(commands) / sizeof(commands[0]));
     int duplicates = 0;
