@@ -74,6 +74,13 @@ _Static_assert(sizeof(dmdrvi_rtc_time_t) == 16 &&
                "RTC calendar layout must be stable across 32/64-bit targets");
 _Static_assert(sizeof(dmdrvi_rtc_info_t) == 24 && sizeof(dmdrvi_rtc_status_t) == 8,
                "RTC info and status must use fixed-width fields");
+_Static_assert(sizeof(dmdrvi_battery_info_t) == 76 && offsetof(dmdrvi_battery_info_t, design_capacity_mah) == 68,
+               "battery info must use fixed-width fields");
+_Static_assert(sizeof(dmdrvi_battery_status_t) == 28 && offsetof(dmdrvi_battery_status_t, current_ma) == 12 &&
+               offsetof(dmdrvi_battery_status_t, cycles) == 26,
+               "battery status layout must be stable across 32/64-bit targets");
+_Static_assert(DMDRVI_IOCTL_BATTERY_GET_INFO >= 0x900 && DMDRVI_IOCTL_BATTERY_GET_STATUS < 0xA00,
+               "battery commands must stay in their standard category");
 _Static_assert(DMDRVI_IOCTL_RTC_GET_TIME >= 0x600 && DMDRVI_IOCTL_RTC_INVALIDATE < 0x700,
                "RTC commands must stay in their standard category");
 
@@ -157,6 +164,7 @@ DMOD_TEST_STEP(dmdrvi_monitor_commands_are_distinct)
         DMDRVI_IOCTL_RTC_GET_STATUS, DMDRVI_IOCTL_RTC_GET_INFO, DMDRVI_IOCTL_RTC_INVALIDATE,
         DMDRVI_IOCTL_WIFI_GET_INFO, DMDRVI_IOCTL_WIFI_GET_STATUS, DMDRVI_IOCTL_WIFI_CONNECT,
         DMDRVI_IOCTL_WIFI_DISCONNECT, DMDRVI_IOCTL_WIFI_SCAN, DMDRVI_IOCTL_WIFI_SET_ENABLED,
+        DMDRVI_IOCTL_BATTERY_GET_INFO, DMDRVI_IOCTL_BATTERY_GET_STATUS,
     };
     const int count = (int)(sizeof(commands) / sizeof(commands[0]));
     int duplicates = 0;

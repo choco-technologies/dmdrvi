@@ -414,6 +414,22 @@ does not know yet (`chip` before the radio is reached) with an empty string.
 The address of the interface is not Wi-Fi's: it is the network stack's
 (DHCP, `ifconfig`) as for any interface.
 
+### Battery Ioctl Commands
+
+A battery node (the node of a gauge, or of a charger that knows the battery) implements the standard
+`DMDRVI_IOCTL_BATTERY_*` commands (0x900 range). A client such as the status bar of a phone or a power service uses them without
+knowing which chip is behind the node. One node is one battery.
+
+| Command | `arg` type | Meaning |
+|---------|------------|---------|
+| `DMDRVI_IOCTL_BATTERY_GET_INFO` | `dmdrvi_battery_info_t*` | driver and chip names, what the node can tell (`capabilities`), the design capacity and voltage |
+| `DMDRVI_IOCTL_BATTERY_GET_STATUS` | `dmdrvi_battery_status_t*` | a fresh reading: state, charge in percent, voltage, current, capacity, temperature, minutes left, cycles |
+
+Every number of the status has its bit in `valid` (`DMDRVI_BATTERY_VALID_*`): what the chip cannot tell is not valid and is zero, and
+a client does not show it. The current is signed: positive into the battery (charging), negative out of it. A failed read clears
+the output (`valid` is 0) and returns `-EIO`. The node never invents a number: a percentage of a chip that has no gauge is not
+derived from the voltage by the interface.
+
 ### Device File System Ioctl Commands
 
 Commands in the 0xF00 range are answered by the file system that exposes
