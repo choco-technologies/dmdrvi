@@ -1008,6 +1008,81 @@ typedef struct
 #define DMDRVI_IOCTL_WIFI_SET_ENABLED         0x705
 
 /*
+ * Battery (0x900 range) - implemented by the node of a battery gauge (or of a charger that knows the battery): how full the battery is,
+ * whether it charges. A client (the status bar of a phone, a power service) uses them without knowing which chip is behind the node.
+ * One node is one battery. Every number of the status has its own bit in `valid`: what the chip cannot tell is not valid (and zero), and
+ * a client does not show it.
+ */
+#define DMDRVI_BATTERY_NAME_MAX         32  /**< Longest driver / chip text, with the terminator. */
+
+/** What a reading tells (the bits of dmdrvi_battery_info_t.capabilities and of dmdrvi_battery_status_t.valid). */
+#define DMDRVI_BATTERY_VALID_STATE          (1u << 0)   /**< `state`. */
+#define DMDRVI_BATTERY_VALID_VOLTAGE        (1u << 1)   /**< `voltage_mv`. */
+#define DMDRVI_BATTERY_VALID_CURRENT        (1u << 2)   /**< `current_ma`. */
+#define DMDRVI_BATTERY_VALID_PERCENT        (1u << 3)   /**< `percent`. */
+#define DMDRVI_BATTERY_VALID_CAPACITY       (1u << 4)   /**< `remaining_mah`, `full_mah`. */
+#define DMDRVI_BATTERY_VALID_TEMPERATURE    (1u << 5)   /**< `temperature_dc`. */
+#define DMDRVI_BATTERY_VALID_TIME           (1u << 6)   /**< `minutes_to_empty` (while discharging) or `minutes_to_full` (while charging). */
+#define DMDRVI_BATTERY_VALID_CYCLES         (1u << 7)   /**< `cycles`. */
+
+/** What the battery does now. */
+typedef enum
+{
+    DMDRVI_BATTERY_STATE_UNKNOWN = 0,   /**< The chip does not say. */
+    DMDRVI_BATTERY_STATE_NOT_PRESENT,   /**< No battery. */
+    DMDRVI_BATTERY_STATE_DISCHARGING,   /**< It powers the device. */
+    DMDRVI_BATTERY_STATE_CHARGING,      /**< It is charged. */
+    DMDRVI_BATTERY_STATE_FULL,          /**< Charged: external power is there, nothing flows. */
+    DMDRVI_BATTERY_STATE_IDLE,          /**< Neither charged nor discharged (charging inhibited: too hot or too cold, a fault). */
+} dmdrvi_battery_state_t;
+
+#define DMDRVI_BATTERY_FLAG_LOW             (1u << 0)   /**< Low: the chip's own alarm (the device should be put on the charger soon). */
+#define DMDRVI_BATTERY_FLAG_CRITICAL        (1u << 1)   /**< Critically low: the device is about to lose power. */
+#define DMDRVI_BATTERY_FLAG_EXTERNAL_POWER  (1u << 2)   /**< The device has power from outside (only when the driver knows). */
+
+/** What is behind the node: DMDRVI_IOCTL_BATTERY_GET_INFO. Texts are terminated; what the driver does not know is empty or zero. */
+typedef struct
+{
+    char        driver[DMDRVI_BATTERY_NAME_MAX];    /**< The driver, e.g. "dmbq27220". */
+    char        chip[DMDRVI_BATTERY_NAME_MAX];      /**< The chip, e.g. "BQ27220". */
+    uint32_t    capabilities;                       /**< DMDRVI_BATTERY_VALID_*: what the node can tell. */
+    uint16_t    design_capacity_mah;                /**< What the battery is made for, 0: not known. */
+    uint16_t    design_voltage_mv;                  /**< Nominal voltage, 0: not known. */
+    uint32_t    reserved;                           /**< Zero. */
+} dmdrvi_battery_info_t;
+
+/** The battery now: DMDRVI_IOCTL_BATTERY_GET_STATUS. */
+typedef struct
+{
+    uint32_t    valid;              /**< DMDRVI_BATTERY_VALID_*: the numbers below that are meaningful. */
+    uint32_t    flags;              /**< DMDRVI_BATTERY_FLAG_*. */
+    uint8_t     state;              /**< dmdrvi_battery_state_t. */
+    uint8_t     percent;            /**< 0..100: the state of charge. */
+    uint16_t    voltage_mv;
+    int32_t     current_ma;         /**< Positive: into the battery (charging), negative: out of it. */
+    uint16_t    remaining_mah;      /**< The charge that is left. */
+    uint16_t    full_mah;           /**< What the battery holds when it is full now (it ages: less than the design capacity). */
+    int16_t     temperature_dc;     /**< Tenths of a degree Celsius. */
+    uint16_t    minutes_to_empty;   /**< While discharging. */
+    uint16_t    minutes_to_full;    /**< While charging. */
+    uint16_t    cycles;             /**< Charge cycles the battery has had. */
+} dmdrvi_battery_status_t;
+
+/**
+ * @brief Read what is behind the node.
+ * @param arg Output pointer to dmdrvi_battery_info_t.
+ * @return 0 on success, or a negative errno-compatible code.
+ */
+#define DMDRVI_IOCTL_BATTERY_GET_INFO         0x900
+
+/**
+ * @brief Read the battery: a fresh reading, taken from the chip (or one that is at most a second old).
+ * @param arg Output pointer to dmdrvi_battery_status_t.
+ * @return 0, -EIO when the chip does not answer (the output is cleared, `valid` is 0), -ENODEV when the chip is not there yet.
+ */
+#define DMDRVI_IOCTL_BATTERY_GET_STATUS       0x901
+
+/*
  * Device file system commands (0xF00 range) - answered by the file system
  * that exposes the node (dmdevfs), never passed to the driver. They give
  * everybody, not only drivers (dmdrvi_friend_changed()), access to what the
