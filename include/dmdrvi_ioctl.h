@@ -1304,6 +1304,160 @@ typedef struct
 #define DMDRVI_IOCTL_BATTERY_GET_STATUS       0x901
 
 /*
+ * LoRa radio (0xA00 range) - implemented by the node of a packet radio that sends and receives LoRa frames (SX1262, SX1276, LR1121 ...): the
+ * parameters of the modulation, a frame sent, a frame received, a look at the channel. A protocol on top of it (a mesh) uses the node without
+ * knowing which chip is behind it. One node is one radio; the frame is what goes through the air (the radio adds the preamble, the header and
+ * the CRC; the protocol sees the payload only). The structures have no pointers: the payload is in them.
+ */
+
+#define DMDRVI_LORA_NAME_MAX            32      /**< Longest driver / chip text, with the terminator. */
+#define DMDRVI_LORA_MAX_PAYLOAD         255     /**< The longest frame the radios take. */
+
+#define DMDRVI_LORA_CAP_LORA            (1u << 0)   /**< LoRa modulation. */
+#define DMDRVI_LORA_CAP_CAD             (1u << 1)   /**< DMDRVI_IOCTL_LORA_CAD. */
+#define DMDRVI_LORA_CAP_IQ_INVERT       (1u << 2)   /**< `iq_invert` of the configuration. */
+
+/** What is behind the node: DMDRVI_IOCTL_LORA_GET_INFO. Texts are terminated; what the driver does not know is zero. */
+typedef struct
+{
+    char        driver[DMDRVI_LORA_NAME_MAX];       /**< The driver, e.g. "dmsx126x". */
+    char        chip[DMDRVI_LORA_NAME_MAX];         /**< The chip, e.g. "SX1262". */
+    uint32_t    capabilities;                       /**< DMDRVI_LORA_CAP_*. */
+    uint32_t    frequency_min_hz;                   /**< The band the radio (and its filter) is made for. */
+    uint32_t    frequency_max_hz;
+    int8_t      tx_power_min_dbm;
+    int8_t      tx_power_max_dbm;
+    uint16_t    reserved0;
+    uint32_t    reserved1;
+} dmdrvi_lora_info_t;
+
+/** The modulation: DMDRVI_IOCTL_LORA_GET_CONFIG / SET_CONFIG. The radio sends and receives with the same configuration. */
+typedef struct
+{
+    uint32_t    frequency_hz;           /**< The carrier, e.g. 869618000. */
+    uint32_t    bandwidth_hz;           /**< 7800 .. 500000: 125000, 250000, 500000 (the radio takes the nearest it has). */
+    uint8_t     spreading_factor;       /**< 5..12. */
+    uint8_t     coding_rate;            /**< 5..8: the denominator of 4/5 .. 4/8. */
+    int8_t      tx_power_dbm;           /**< Within tx_power_min_dbm .. tx_power_max_dbm of the info. */
+    uint8_t     crc;                    /**< 1: the radio adds a CRC to the frame and drops the frames that fail it. */
+    uint16_t    preamble_symbols;       /**< Symbols of the preamble sent (8, 16 ...); the receiver needs the same or more. */
+    uint16_t    sync_word;              /**< 0x1424 (private) or 0x3444 (public: LoRaWAN) for the SX126x; a radio that has a byte uses the low one. */
+    uint8_t     implicit_header;        /**< 1: no header (the length is `payload_length` of both sides); 0: the header carries it. */
+    uint8_t     iq_invert;              /**< 1: inverted IQ. */
+    uint8_t     payload_length;         /**< The length of the frames when `implicit_header` is 1. */
+    uint8_t     reserved;
+} dmdrvi_lora_config_t;
+
+/** A frame: DMDRVI_IOCTL_LORA_SEND (in) / DMDRVI_IOCTL_LORA_RECV (in: timeout_ms; out: the rest). */
+typedef struct
+{
+    uint32_t    timeout_ms;             /**< SEND: how long the transmission may take; RECV: how long to wait for a frame (0: look, do not wait). */
+    uint32_t    airtime_us;             /**< SEND (out): the time the frame was in the air. */
+    uint16_t    length;                 /**< SEND (in) / RECV (out): the bytes of `data`. */
+    int16_t     rssi_dbm;               /**< RECV (out): the strength of the frame. */
+    int16_t     snr_dbx4;               /**< RECV (out): the signal to noise ratio in quarters of a dB (-40 = -10 dB). */
+    uint8_t     crc_error;              /**< RECV (out): 1: the frame came with a wrong CRC (only when the configuration says crc=0 is it delivered). */
+    uint8_t     reserved;
+    uint8_t     data[DMDRVI_LORA_MAX_PAYLOAD + 1];
+} dmdrvi_lora_frame_t;
+
+typedef enum
+{
+    DMDRVI_LORA_STATE_UNKNOWN = 0,
+    DMDRVI_LORA_STATE_SLEEP,
+    DMDRVI_LORA_STATE_IDLE,
+    DMDRVI_LORA_STATE_RX,
+    DMDRVI_LORA_STATE_TX,
+} dmdrvi_lora_state_t;
+
+/** The radio now: DMDRVI_IOCTL_LORA_GET_STATUS. */
+typedef struct
+{
+    uint8_t     state;                  /**< dmdrvi_lora_state_t. */
+    uint8_t     reserved[3];
+    int16_t     last_rssi_dbm;          /**< Of the last frame (0 when none came). */
+    int16_t     last_snr_dbx4;
+    int16_t     channel_rssi_dbm;       /**< The instantaneous strength on the channel (the noise floor) when the radio listens, else 0. */
+    uint16_t    reserved1;
+    uint32_t    frames_sent;
+    uint32_t    frames_received;
+    uint32_t    crc_errors;
+    uint32_t    tx_timeouts;
+} dmdrvi_lora_status_t;
+
+/** DMDRVI_IOCTL_LORA_CAD: how long to look, what was seen. */
+typedef struct
+{
+    uint32_t    timeout_ms;             /**< How long the channel may be looked at. */
+    uint8_t     busy;                   /**< Out: 1: the preamble of a frame (activity) was found. */
+    uint8_t     reserved[3];
+} dmdrvi_lora_cad_t;
+
+/** DMDRVI_IOCTL_LORA_AIRTIME: the time of a frame of `length` bytes with the configuration now. */
+typedef struct
+{
+    uint16_t    length;                 /**< In. */
+    uint16_t    reserved;
+    uint32_t    airtime_us;             /**< Out. */
+} dmdrvi_lora_airtime_t;
+
+/**
+ * @brief Read what is behind the node.
+ * @param arg Output pointer to dmdrvi_lora_info_t.
+ * @return 0 on success, or a negative errno-compatible code.
+ */
+#define DMDRVI_IOCTL_LORA_GET_INFO            0xA00
+
+/**
+ * @brief Read the configuration of the radio.
+ * @param arg Output pointer to dmdrvi_lora_config_t.
+ * @return 0 on success, -ENODEV when the chip is not there yet.
+ */
+#define DMDRVI_IOCTL_LORA_GET_CONFIG          0xA01
+
+/**
+ * @brief Change the configuration: the radio goes to the new one at once (what it receives meanwhile is lost).
+ * @param arg dmdrvi_lora_config_t.
+ * @return 0, -EINVAL (a value out of the range of the chip or of the info), -EBUSY while a frame is being sent, -ENODEV.
+ */
+#define DMDRVI_IOCTL_LORA_SET_CONFIG          0xA02
+
+/**
+ * @brief Send a frame and wait until it has gone out. The radio stops listening for that time and listens again after it.
+ * @param arg dmdrvi_lora_frame_t (`data`, `length`, `timeout_ms`; `airtime_us` out).
+ * @return 0, -EINVAL (length 0 or over 255), -ETIMEDOUT (the chip did not finish: it is reset and configured again), -EBUSY, -ENODEV.
+ */
+#define DMDRVI_IOCTL_LORA_SEND                0xA10
+
+/**
+ * @brief Wait for a frame. The radio listens all the time between the calls; the frames that came meanwhile are kept (a few) and given in order.
+ * @param arg dmdrvi_lora_frame_t (`timeout_ms` in; the rest out).
+ * @return 0 (a frame), -ETIMEDOUT (none came in `timeout_ms`), -EAGAIN (timeout_ms 0 and none there), -ENODEV.
+ */
+#define DMDRVI_IOCTL_LORA_RECV                0xA11
+
+/**
+ * @brief Channel activity detection: is somebody sending now? (listen before talk)
+ * @param arg dmdrvi_lora_cad_t.
+ * @return 0, -ENOTSUP (no DMDRVI_LORA_CAP_CAD), -EBUSY while a frame is being sent.
+ */
+#define DMDRVI_IOCTL_LORA_CAD                 0xA12
+
+/**
+ * @brief The time a frame of a given length takes in the air with the configuration now (a mesh keeps its duty cycle with it).
+ * @param arg dmdrvi_lora_airtime_t.
+ * @return 0.
+ */
+#define DMDRVI_IOCTL_LORA_AIRTIME             0xA13
+
+/**
+ * @brief The state of the radio and its counters.
+ * @param arg Output pointer to dmdrvi_lora_status_t.
+ * @return 0, or a negative errno-compatible code.
+ */
+#define DMDRVI_IOCTL_LORA_GET_STATUS          0xA14
+
+/*
  * Device file system commands (0xF00 range) - answered by the file system
  * that exposes the node (dmdevfs), never passed to the driver. They give
  * everybody, not only drivers (dmdrvi_friend_changed()), access to what the

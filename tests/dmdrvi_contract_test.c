@@ -86,6 +86,17 @@ _Static_assert(sizeof(dmdrvi_battery_status_t) == 28 && offsetof(dmdrvi_battery_
                "battery status layout must be stable across 32/64-bit targets");
 _Static_assert(DMDRVI_IOCTL_BATTERY_GET_INFO >= 0x900 && DMDRVI_IOCTL_BATTERY_GET_STATUS < 0xA00,
                "battery commands must stay in their standard category");
+_Static_assert(sizeof(dmdrvi_lora_info_t) == 84 && offsetof(dmdrvi_lora_info_t, capabilities) == 64 && offsetof(dmdrvi_lora_info_t, tx_power_min_dbm) == 76,
+               "lora info must use fixed-width fields");
+_Static_assert(sizeof(dmdrvi_lora_config_t) == 20 && offsetof(dmdrvi_lora_config_t, spreading_factor) == 8 &&
+               offsetof(dmdrvi_lora_config_t, sync_word) == 14 && offsetof(dmdrvi_lora_config_t, payload_length) == 18,
+               "lora config must use fixed-width fields");
+_Static_assert(sizeof(dmdrvi_lora_frame_t) == 272 && offsetof(dmdrvi_lora_frame_t, length) == 8 && offsetof(dmdrvi_lora_frame_t, data) == 16,
+               "lora frame must be the same on 32 and 64-bit targets (no pointers)");
+_Static_assert(sizeof(dmdrvi_lora_status_t) == 28 && sizeof(dmdrvi_lora_cad_t) == 8 && sizeof(dmdrvi_lora_airtime_t) == 8,
+               "lora structures must use fixed-width fields");
+_Static_assert(DMDRVI_IOCTL_LORA_GET_INFO >= 0xA00 && DMDRVI_IOCTL_LORA_GET_STATUS < 0xB00,
+               "lora commands must stay in their standard category");
 _Static_assert(DMDRVI_IOCTL_RTC_GET_TIME >= 0x600 && DMDRVI_IOCTL_RTC_INVALIDATE < 0x700,
                "RTC commands must stay in their standard category");
 
@@ -174,6 +185,8 @@ DMOD_TEST_STEP(dmdrvi_monitor_commands_are_distinct)
         DMDRVI_IOCTL_MODEM_SMS_LIST, DMDRVI_IOCTL_MODEM_SMS_READ, DMDRVI_IOCTL_MODEM_SMS_DELETE,
         DMDRVI_IOCTL_MODEM_WAIT_EVENT,
         DMDRVI_IOCTL_BATTERY_GET_INFO, DMDRVI_IOCTL_BATTERY_GET_STATUS,
+        DMDRVI_IOCTL_LORA_GET_INFO, DMDRVI_IOCTL_LORA_GET_CONFIG, DMDRVI_IOCTL_LORA_SET_CONFIG, DMDRVI_IOCTL_LORA_SEND, DMDRVI_IOCTL_LORA_RECV,
+        DMDRVI_IOCTL_LORA_CAD, DMDRVI_IOCTL_LORA_AIRTIME, DMDRVI_IOCTL_LORA_GET_STATUS,
     };
     const int count = (int)(sizeof(commands) / sizeof(commands[0]));
     int duplicates = 0;
