@@ -453,6 +453,25 @@ a client does not show it. The current is signed: positive into the battery (cha
 the output (`valid` is 0) and returns `-EIO`. The node never invents a number: a percentage of a chip that has no gauge is not
 derived from the voltage by the interface.
 
+### LoRa Ioctl Commands
+
+A LoRa radio node (SX1262, SX1276, LR1121 ...) implements the standard `DMDRVI_IOCTL_LORA_*` commands (0xA00 range): the modulation, a frame
+sent, a frame received, a look at the channel. A protocol on top of it (a mesh) uses the node without knowing which chip is behind it. One node
+is one radio. The structures have no pointers: the payload (up to 255 bytes) is in them.
+
+| Command | `arg` type | Meaning |
+|---------|------------|---------|
+| `DMDRVI_IOCTL_LORA_GET_INFO` | `dmdrvi_lora_info_t*` | driver and chip, capabilities, the band and the power range |
+| `DMDRVI_IOCTL_LORA_GET_CONFIG` / `SET_CONFIG` | `dmdrvi_lora_config_t*` | carrier, bandwidth, spreading factor, coding rate, power, CRC, preamble, sync word, header, IQ |
+| `DMDRVI_IOCTL_LORA_SEND` | `dmdrvi_lora_frame_t*` | send a frame and wait until it has gone out (the air time comes back) |
+| `DMDRVI_IOCTL_LORA_RECV` | `dmdrvi_lora_frame_t*` | wait for a frame (with its RSSI and SNR); the radio listens between the calls and a few frames are kept |
+| `DMDRVI_IOCTL_LORA_CAD` | `dmdrvi_lora_cad_t*` | is somebody sending on the channel now (listen before talk) |
+| `DMDRVI_IOCTL_LORA_AIRTIME` | `dmdrvi_lora_airtime_t*` | the time a frame of a given length takes in the air with the configuration now |
+| `DMDRVI_IOCTL_LORA_GET_STATUS` | `dmdrvi_lora_status_t*` | state, last RSSI/SNR, the noise floor, counters |
+
+The radio listens whenever it does not send; `SEND` stops it for the time of the transmission and returns it to listening. A frame that
+fails the CRC is dropped (`crc=1`) and counted in `crc_errors`.
+
 ### Device File System Ioctl Commands
 
 Commands in the 0xF00 range are answered by the file system that exposes
