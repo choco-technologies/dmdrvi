@@ -168,7 +168,8 @@ generic graphics library only needs the device path: `GET_INFO` returns a
 `dmdrvi_gfx_info_t` (resolution, `dmdrvi_gfx_pixel_format_t`, bytes per pixel,
 stride, buffer count). The others are `GET_FRAMEBUFFER`, `SWAP_BUFFERS`,
 `WAIT_VSYNC`, `FILL_RECT` (`0xAARRGGBB`, converted by the driver),
-`SET/GET_DISPLAY_ENABLED`, `SET/GET_BACKLIGHT` and `PRESENT`. `PRESENT`
+`SET/GET_DISPLAY_ENABLED`, `SET/GET_BACKLIGHT`, `SET/GET_BRIGHTNESS` (0..255, only for a
+backlight that can be dimmed - otherwise `-ENOTSUP`) and `PRESENT`. `PRESENT`
 makes the drawing visible whatever the buffer count: double buffered, it shows
 the drawing buffer at the next frame and copies the area drawn into the other
 buffer, so a client that redraws only what changed draws without tearing and
