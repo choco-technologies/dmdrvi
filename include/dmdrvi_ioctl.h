@@ -328,6 +328,24 @@ typedef struct
  */
 #define DMDRVI_IOCTL_GFX_PRESENT              0x309
 
+/**
+ * Set the brightness of the backlight, 0 (darkest) .. 255 (brightest) - a perceived scale: the driver applies its own curve.
+ * Only a display whose backlight can be dimmed (a PWM output) has it; a display with a backlight that is only on or off answers
+ * -ENOTSUP, and so does a driver that does not know the command (-ENOTTY): a client then offers no brightness setting.
+ * The backlight is still lit only while the display and the backlight are enabled (SET_BACKLIGHT): 0 is the darkest the panel goes
+ * while it is on, SET_BACKLIGHT false switches it off.
+ *
+ * arg: const uint8_t* - input
+ */
+#define DMDRVI_IOCTL_GFX_SET_BRIGHTNESS       0x30A
+
+/**
+ * Read the brightness set with SET_BRIGHTNESS (255 at the start unless the driver is configured otherwise).
+ *
+ * arg: uint8_t* - output
+ */
+#define DMDRVI_IOCTL_GFX_GET_BRIGHTNESS       0x30B
+
 /*
  * Input commands - for any device a user touches, moves or presses (touch
  * panel, mouse, buttons). Generic code (a GUI library, a test tool) needs
