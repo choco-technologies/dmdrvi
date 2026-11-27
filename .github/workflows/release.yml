@@ -27,7 +27,8 @@ jobs:
       - name: List available architectures
         id: list-archs
         run: |
-          DMOD_SRC_DIR=$(find build_discovery -path "*/_deps/dmod-src" -type d | head -1)
+          # (not the object directories of the tests, whose names also end in _deps/dmod-src: which one find lists first varies)
+          DMOD_SRC_DIR=$(find build_discovery -path "*/_deps/dmod-src" -type d -not -path "*/CMakeFiles/*" | head -1)
           
           # create JSON array
           ARCHS=$(find ${DMOD_SRC_DIR}/configs/arch -name "tools-cfg.cmake" | \
